@@ -1,0 +1,961 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Reaction Lyrics</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Bungee&family=DM+Serif+Display&family=Fredoka:wght@600&family=IBM+Plex+Mono:wght@400;500&family=Pacifico&family=Righteous&family=Rubik+Mono+One&display=swap">
+<style>
+/* Layout: one full-height stage (the canvas, letterboxed to its video format) over a slim control bar;
+   settings live in a drawer (bottom sheet on phones, right rail on desktop). Monochrome like the pattern itself. */
+:root {
+  color-scheme: dark;
+  --ink: #0b0b0a;
+  --ink-2: #171715;
+  --ink-3: #22221f;
+  --paper: #f1f0ea;
+  --mute: #8f8d84;
+  --line: rgba(241, 240, 234, .14);
+  --rec: #ff3b30;
+  --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--ink); color: var(--paper); font-family: var(--mono); font-size: 13px; overflow: hidden; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.stage-wrap {
+  position: relative; min-height: 0; display: flex; align-items: center; justify-content: center;
+  padding-block: 12px 6px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+#stage {
+  display: block; width: auto; height: auto; max-width: 100%; max-height: 100%;
+  background: var(--paper); border-radius: 6px; touch-action: manipulation;
+  box-shadow: 0 0 0 1px var(--line);
+  -webkit-user-select: none; user-select: none;
+}
+.tag {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); border: 1px solid var(--line);
+  border-radius: 999px; padding: 6px 12px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  pointer-events: none; white-space: nowrap;
+}
+
+.bar {
+  display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
+  padding-block: 8px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding-inline: 16px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--ink-2);
+  font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: -.01em;
+  transition: background .15s, transform .1s;
+}
+.btn:hover { background: var(--ink-3); }
+.btn:active { transform: scale(.97); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn.primary { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+.btn.primary:hover { background: #fff; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--rec); flex: none; }
+.btn.recording { border-color: var(--rec); }
+.btn.recording .dot { border-radius: 2px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .35; } }
+.rec-time { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+.app.clean .bar { display: none; }
+.app.clean .stage-wrap { padding: 0; }
+.app.clean #stage { border-radius: 0; box-shadow: none; }
+
+.drawer {
+  position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; max-height: 76%;
+  overflow-y: auto; overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--ink) 94%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+  transform: translateY(105%); transition: transform .28s cubic-bezier(.2, .8, .2, 1);
+  padding-block: 0 calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.drawer.open { transform: none; }
+@media (min-width: 900px) {
+  .drawer { left: auto; top: 0; width: 400px; max-height: none; border-top: 0; border-left: 1px solid var(--line);
+    border-radius: 0; transform: translateX(105%); padding-top: env(safe-area-inset-top, 0px); }
+}
+.drawer-head {
+  position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between;
+  padding-block: 16px 12px; background: inherit;
+}
+.drawer-head h2 { margin: 0; font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: -.03em; }
+.close { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line); background: var(--ink-2); display: grid; place-items: center; }
+.close svg { width: 16px; height: 16px; }
+section { display: grid; gap: 12px; padding-block: 16px; border-top: 1px solid var(--line); }
+section h3 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field > span { font-size: 11px; color: var(--mute); display: flex; justify-content: space-between; gap: 8px; }
+.field > span output { color: var(--paper); font-variant-numeric: tabular-nums; }
+select, textarea, input[type="number"] {
+  width: 100%; background: var(--ink-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+select { appearance: none; -webkit-appearance: none; padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--mute) 50%), linear-gradient(135deg, var(--mute) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat; }
+textarea { min-height: 150px; resize: vertical; line-height: 1.5; font-size: 14px; }
+input[type="range"] { width: 100%; accent-color: var(--paper); }
+.check { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+.check input { width: 18px; height: 18px; accent-color: var(--paper); }
+.small { font-size: 11px; color: var(--mute); line-height: 1.5; margin: 0; }
+.small code { color: var(--paper); }
+.chip { display: inline-flex; align-items: center; height: 36px; padding-inline: 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--ink-2); font-size: 12px; }
+.chip.on { background: var(--paper); color: var(--ink); }
+.file-name { font-size: 12px; color: var(--paper); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+.toast {
+  position: fixed; z-index: 30; left: 50%; top: calc(14px + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center; max-width: calc(100% - 32px);
+  background: var(--paper); color: var(--ink); border-radius: 14px; padding: 10px 12px 10px 16px;
+  font-family: var(--display); font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.toast button { border: 0; background: var(--ink); color: var(--paper); border-radius: 999px; height: 34px; padding-inline: 14px; font-family: var(--display); font-weight: 500; }
+.toast .x { background: transparent; color: var(--ink); padding-inline: 6px; }
+.fail { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--mute); }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } .btn.recording .dot { animation: none; } }
+</style>
+
+<div class="app" id="app">
+  <div class="stage-wrap" id="stageWrap">
+    <canvas id="stage" width="1080" height="1920" aria-label="Reaction-diffusion visualizer"></canvas>
+    <div class="tag" id="tag" hidden></div>
+  </div>
+  <div class="bar" id="bar">
+    <button class="btn primary" id="btnPlay" type="button" aria-label="Play or pause">
+      <svg id="icoPlay" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
+      <svg id="icoPause" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+      <span id="playLabel">Play</span>
+    </button>
+    <button class="btn" id="btnShuffle" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+      Randomize
+    </button>
+    <button class="btn" id="btnRec" type="button"><span class="dot"></span><span id="recLabel">Record</span></button>
+    <button class="btn" id="btnOpen" type="button" aria-controls="drawer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+      Lyrics &amp; look
+    </button>
+  </div>
+</div>
+
+<aside class="drawer" id="drawer" aria-label="Settings">
+  <div class="drawer-head">
+    <h2>Lyrics &amp; look</h2>
+    <button class="close" id="btnClose" type="button" aria-label="Close settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg>
+    </button>
+  </div>
+
+  <section>
+    <h3>Song</h3>
+    <div class="row">
+      <label class="btn" for="file" style="height:40px">Load song</label>
+      <input type="file" id="file" accept="audio/*,video/*">
+      <button class="chip" id="btnMic" type="button">Use mic</button>
+    </div>
+    <div class="file-name" id="fileName">No song loaded. A practice beat runs instead.</div>
+    <label class="field" id="bpmField"><span>Practice beat <output id="o_bpm">96 BPM</output></span>
+      <input type="range" id="bpm" data-key="bpm" min="60" max="180" step="1" value="96"></label>
+  </section>
+
+  <section>
+    <h3>Lyrics</h3>
+    <label class="field"><span>One line per phrase. Each word gets carved into the pattern.</span>
+      <textarea id="lyrics" spellcheck="false"></textarea></label>
+    <p class="small">For exact timing, paste <code>.lrc</code> lyrics like <code>[00:12.40] your line here</code> and pick "Timed (LRC)".</p>
+    <div class="grid2">
+      <label class="field"><span>Next word on</span>
+        <select id="mode" data-key="mode">
+          <option value="beat">Every beat</option>
+          <option value="tap">Tap / spacebar</option>
+          <option value="timer">Steady timer</option>
+          <option value="lrc">Timed (LRC)</option>
+        </select></label>
+      <label class="field" id="bpwField"><span>Beats per word</span>
+        <select id="bpw" data-key="bpw">
+          <option value="1">1</option><option value="2">2</option><option value="4">4</option>
+        </select></label>
+      <label class="field" id="intervalField" hidden><span>Seconds per word <output id="o_interval">0.6</output></span>
+        <input type="range" id="interval" data-key="interval" min="0.2" max="2" step="0.05" value="0.6"></label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Word layout</span>
+        <select id="layout" data-key="layout">
+          <option value="random">Random per line</option>
+          <option value="stack">Stacked</option>
+          <option value="scatter">Scattered</option>
+          <option value="center">One at a time</option>
+        </select></label>
+      <label class="field"><span>Font</span>
+        <select id="font" data-key="font"></select></label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Word size <output id="o_wsize">1.0×</output></span>
+        <input type="range" id="wsize" data-key="wsize" min="0.5" max="1.8" step="0.05" value="1"></label>
+      <label class="field"><span>Tilt <output id="o_tilt">0°</output></span>
+        <input type="range" id="tilt" data-key="tilt" min="0" max="30" step="1" value="0"></label>
+    </div>
+  </section>
+
+  <section>
+    <h3>Pattern</h3>
+    <div class="grid2">
+      <label class="field"><span>Growth</span><select id="preset" data-key="preset"></select></label>
+      <label class="field"><span>Colors</span><select id="palette" data-key="palette"></select></label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Pattern size <output id="o_scale">3.0</output></span>
+        <input type="range" id="scale" data-key="scale" min="2" max="5" step="0.5" value="3"></label>
+      <label class="field"><span>Speed <output id="o_speed">14</output></span>
+        <input type="range" id="speed" data-key="speed" min="2" max="28" step="1" value="14"></label>
+    </div>
+    <label class="field"><span>Music reactivity <output id="o_react">1.0</output></span>
+      <input type="range" id="react" data-key="react" min="0" max="2" step="0.1" value="1"></label>
+    <label class="check"><input type="checkbox" id="invert" data-key="invert"> Invert colors</label>
+    <label class="check"><input type="checkbox" id="seeds" data-key="seeds" checked> Drop blobs on the beat</label>
+    <label class="check"><input type="checkbox" id="chaos" data-key="chaos"> Chaos: reshuffle the look on every new line</label>
+  </section>
+
+  <section>
+    <h3>Video</h3>
+    <label class="field"><span>Format</span>
+      <select id="format" data-key="format">
+        <option value="9:16">9:16 vertical (TikTok, Reels)</option>
+        <option value="1:1">1:1 square</option>
+        <option value="16:9">16:9 wide (YouTube)</option>
+      </select></label>
+    <p class="small">Record restarts your song from the top and saves a video with the audio. Without a song it records silent video.</p>
+    <div class="row">
+      <button class="chip" id="btnRestart" type="button">Restart from top</button>
+      <button class="chip" id="btnClear" type="button">Clear to white</button>
+      <button class="chip" id="btnClean" type="button">Hide controls</button>
+      <button class="chip" id="btnFull" type="button">Fullscreen</button>
+    </div>
+    <p class="small">Hide controls for a clean screen recording. Press and hold the picture (or press H) to bring them back.</p>
+  </section>
+</aside>
+
+<div class="toast" id="toast" hidden role="status"><span id="toastMsg"></span><button id="toastAct" type="button" hidden></button><button class="x" id="toastX" type="button" aria-label="Dismiss">✕</button></div>
+<audio id="song" playsinline preload="auto"></audio>
+
+<script>
+(() => {
+'use strict';
+const $ = (s) => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ---------- data ---------- */
+const FONTS = [
+  { name: 'Fredoka', weight: 600, label: 'Fredoka (rounded)' },
+  { name: 'Archivo Black', weight: 400, label: 'Archivo Black' },
+  { name: 'Bungee', weight: 400, label: 'Bungee' },
+  { name: 'Rubik Mono One', weight: 400, label: 'Rubik Mono' },
+  { name: 'Bebas Neue', weight: 400, label: 'Bebas Neue' },
+  { name: 'DM Serif Display', weight: 400, label: 'DM Serif' },
+  { name: 'Righteous', weight: 400, label: 'Righteous' },
+  { name: 'Pacifico', weight: 400, label: 'Pacifico (script)' },
+];
+// Gray-Scott feed / kill rates (dA = 1.0, dB = 0.5, 9-point Laplacian)
+const PRESETS = {
+  maze:   { f: 0.0545, k: 0.0620, label: 'Maze' },
+  finger: { f: 0.0370, k: 0.0600, label: 'Fingerprint' },
+  dots:   { f: 0.0390, k: 0.0588, label: 'Dots' },
+  worms:  { f: 0.0780, k: 0.0610, label: 'Worms' },
+  coral:  { f: 0.0420, k: 0.0630, label: 'Coral' },
+  dashes: { f: 0.0620, k: 0.0650, label: 'Dashes' },
+};
+const PALETTES = {
+  mono:    { label: 'Paper & ink', bg: '#f6f5f1', fg1: '#0a0a0a', fg2: '#0a0a0a' },
+  night:   { label: 'Night', bg: '#060606', fg1: '#f3f2ee', fg2: '#f3f2ee' },
+  cobalt:  { label: 'Cobalt', bg: '#eef1f8', fg1: '#1b2bb8', fg2: '#1b2bb8' },
+  ember:   { label: 'Ember', bg: '#100604', fg1: '#ff5a1f', fg2: '#ffc93d' },
+  moss:    { label: 'Moss', bg: '#e8ebdc', fg1: '#22351d', fg2: '#22351d' },
+  candy:   { label: 'Candy', bg: '#ffe4ef', fg1: '#3b0f4a', fg2: '#c2185b' },
+  chrome:  { label: 'Chrome', bg: '#0b0c10', fg1: '#9fb2ff', fg2: '#ffffff' },
+  blood:   { label: 'Blood', bg: '#0a0303', fg1: '#d8141c', fg2: '#d8141c' },
+};
+const FORMATS = { '9:16': [1080, 1920], '1:1': [1080, 1080], '16:9': [1920, 1080] };
+const SAMPLE = `type your lyrics in here
+every word grows out of the pattern
+new line new spot
+hit randomize
+and let it melt`;
+
+const S = {
+  bpm: 96, mode: 'beat', bpw: 1, interval: 0.6, layout: 'random', font: 'random', wsize: 1, tilt: 0,
+  preset: 'maze', palette: 'mono', scale: 3, speed: 14, react: 1, invert: false, seeds: true, chaos: false, format: '9:16',
+};
+
+/* ---------- populate selects ---------- */
+const fontSel = $('#font');
+fontSel.add(new Option('Random per word', 'random'));
+FONTS.forEach((f, i) => fontSel.add(new Option(f.label, String(i))));
+Object.entries(PRESETS).forEach(([k, p]) => $('#preset').add(new Option(p.label, k)));
+Object.entries(PALETTES).forEach(([k, p]) => $('#palette').add(new Option(p.label, k)));
+
+/* ---------- toast ---------- */
+let toastTimer = 0;
+function toast(msg, actLabel, act, ms = 3500) {
+  $('#toastMsg').textContent = msg;
+  const b = $('#toastAct');
+  b.hidden = !actLabel; b.textContent = actLabel || ''; b.onclick = act || null;
+  $('#toast').hidden = false;
+  clearTimeout(toastTimer);
+  if (ms) toastTimer = setTimeout(() => { $('#toast').hidden = true; }, ms);
+}
+$('#toastX').onclick = () => { $('#toast').hidden = true; };
+
+/* ---------- WebGL ---------- */
+const canvas = $('#stage');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
+if (!gl) {
+  const d = document.createElement('div'); d.className = 'fail';
+  d.textContent = 'This browser can’t run WebGL 2, which the visualizer needs. Try a recent Safari, Chrome or Firefox.';
+  $('#stageWrap').appendChild(d); return;
+}
+const hasF32 = !!gl.getExtension('EXT_color_buffer_float');
+const hasF16 = !!gl.getExtension('EXT_color_buffer_half_float');
+
+const VS = `#version 300 es
+in vec2 p; out vec2 vUv;
+void main(){ vUv = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }`;
+
+const SIM = `#version 300 es
+precision highp float; precision highp int;
+uniform highp sampler2D uState; uniform sampler2D uMask;
+uniform ivec2 uSize; uniform float uFeed, uKill, uGain;
+out vec4 o;
+vec2 S(ivec2 p){ return texelFetch(uState, (p + uSize) % uSize, 0).rg; }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec2 c = S(p);
+  vec2 lap = -c
+    + 0.2  * (S(p+ivec2(1,0)) + S(p+ivec2(-1,0)) + S(p+ivec2(0,1)) + S(p+ivec2(0,-1)))
+    + 0.05 * (S(p+ivec2(1,1)) + S(p+ivec2(-1,1)) + S(p+ivec2(1,-1)) + S(p+ivec2(-1,-1)));
+  float A = c.r, B = c.g, r = A*B*B;
+  vec2 n = vec2(A + (1.0*lap.r - r + uFeed*(1.0-A)),
+                B + (0.5*lap.g + r - (uKill+uFeed)*B));
+  vec4 m = texelFetch(uMask, p, 0);
+  n = mix(n, vec2(1.0, 0.0), clamp(m.r - m.g, 0.0, 1.0) * uGain);  // inside letters: clear
+  n = mix(n, vec2(0.3, 0.6), m.g * uGain);                          // letter outline: ink
+  n = mix(n, vec2(0.4, 0.6), m.b * uGain);                          // beat blobs: seed
+  o = vec4(clamp(n, 0.0, 1.0), 0.0, 1.0);
+}`;
+
+const INIT = `#version 300 es
+precision highp float; out vec4 o; void main(){ o = vec4(1.0, 0.0, 0.0, 1.0); }`;
+
+const DISP = `#version 300 es
+precision highp float; precision highp int;
+uniform highp sampler2D uState; uniform ivec2 uSize;
+uniform vec3 uBg, uFg1, uFg2; uniform float uZoom, uPulse;
+in vec2 vUv; out vec4 o;
+float V(ivec2 p){ vec2 s = texelFetch(uState, (p + uSize) % uSize, 0).rg; return s.r - s.g; }
+void main(){
+  vec2 uv = (vUv - 0.5) / (1.0 + uZoom) + 0.5;
+  vec2 t = uv * vec2(uSize) - 0.5;
+  vec2 f = fract(t); ivec2 i = ivec2(floor(t));
+  float v = mix(mix(V(i), V(i+ivec2(1,0)), f.x), mix(V(i+ivec2(0,1)), V(i+ivec2(1,1)), f.x), f.y);
+  float w = max(fwidth(v) * 0.8, 0.003);
+  float m = smoothstep(0.42 - w, 0.42 + w, v);
+  vec3 fg = mix(uFg1, uFg2, vUv.y);
+  fg = mix(fg, vec3(1.0), uPulse * 0.12 * step(0.5, dot(fg, vec3(0.333))));
+  o = vec4(mix(fg, uBg, m), 1.0);
+}`;
+
+function compile(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, VS)); gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fs));
+  gl.bindAttribLocation(p, 0, 'p'); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
+  return { p, u };
+}
+const P_SIM = program(SIM), P_INIT = program(INIT), P_DISP = program(DISP);
+
+const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+function texFormat() {
+  const tries = [];
+  if (hasF32) tries.push([gl.RGBA32F, gl.FLOAT]);
+  if (hasF32 || hasF16) tries.push([gl.RGBA16F, gl.HALF_FLOAT]);
+  for (const [internal, type] of tries) {
+    const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texImage2D(gl.TEXTURE_2D, 0, internal, 4, 4, 0, gl.RGBA, type, null);
+    const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb); gl.deleteTexture(t);
+    if (ok) return { internal, type };
+  }
+  return null;
+}
+const FMT = texFormat();
+if (!FMT) { toast('Your device can’t render float textures, so the pattern can’t run here.', null, null, 0); return; }
+
+let W = 1080, H = 1920, SW = 360, SH = 640;
+let tex = [], fbo = [], cur = 0, maskTex = null;
+const maskCanvas = document.createElement('canvas');
+const mctx = maskCanvas.getContext('2d');
+
+function newTex(w, h, internal, fmt, type, data) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, fmt, type, data || null);
+  return t;
+}
+function allocate() {
+  [W, H] = FORMATS[S.format];
+  canvas.width = W; canvas.height = H;
+  SW = Math.round(W / S.scale); SH = Math.round(H / S.scale);
+  tex.forEach((t) => gl.deleteTexture(t)); fbo.forEach((f) => gl.deleteFramebuffer(f));
+  if (maskTex) gl.deleteTexture(maskTex);
+  tex = [0, 1].map(() => newTex(SW, SH, FMT.internal, gl.RGBA, FMT.type));
+  fbo = tex.map((t) => {
+    const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return f;
+  });
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  maskCanvas.width = SW; maskCanvas.height = SH;
+  maskTex = newTex(SW, SH, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
+  maskEmpty = false;
+  words.length = 0; seeds.length = 0;
+  resetSim(true);
+}
+function resetSim(withSeeds) {
+  for (const f of fbo) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.viewport(0, 0, SW, SH);
+    gl.useProgram(P_INIT.p); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (withSeeds) {
+    const n = Math.round(rand(5, 8));
+    for (let i = 0; i < n; i++) addSeed(rand(0.08, 0.92) * SW, rand(0.08, 0.92) * SH, rand(5, 9), Math.random() < 0.5 ? 'plus' : 'dot', 0.35);
+  }
+}
+
+/* ---------- words & seeds (drawn into the mask) ---------- */
+const words = [];   // {text,x,y,size,font,rot,born,release,box}
+const seeds = [];   // {x,y,r,shape,born,life}
+let maskEmpty = false;
+let NOW = performance.now() / 1000;
+const STROKE = 6;   // outline width in sim pixels, about one stripe
+
+function addSeed(x, y, r, shape, life = 0.16) { seeds.push({ x, y, r, shape, born: NOW, life }); }
+function setFont(f, size) { mctx.font = `${f.weight} ${Math.round(size)}px "${f.name}", "Arial Black", sans-serif`; }
+
+function drawMask() {
+  const active = words.length || seeds.length;
+  if (!active && maskEmpty) return false;
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
+  mctx.globalCompositeOperation = 'source-over'; mctx.globalAlpha = 1;
+  mctx.fillStyle = '#000'; mctx.fillRect(0, 0, SW, SH);
+  mctx.globalCompositeOperation = 'lighter';
+  mctx.textBaseline = 'middle'; mctx.textAlign = 'left';
+  mctx.lineJoin = 'round'; mctx.lineWidth = STROKE;
+  for (let i = words.length - 1; i >= 0; i--) {
+    const w = words[i];
+    let s;
+    if (w.release == null) s = clamp((NOW - w.born) / 0.05, 0, 1);
+    else s = 1 - (NOW - w.release) / 0.35;
+    if (s <= 0) { words.splice(i, 1); continue; }
+    mctx.save(); mctx.translate(w.x, w.y); mctx.rotate(w.rot); mctx.globalAlpha = s;
+    setFont(w.font, w.size);
+    mctx.strokeStyle = '#f00'; mctx.lineWidth = STROKE * 2.6; mctx.strokeText(w.text, 0, 0);
+    mctx.lineWidth = STROKE;
+    mctx.fillStyle = '#f00'; mctx.fillText(w.text, 0, 0);
+    mctx.strokeStyle = '#0f0'; mctx.strokeText(w.text, 0, 0);
+    mctx.restore();
+  }
+  mctx.fillStyle = '#00f'; mctx.globalAlpha = 1;
+  for (let i = seeds.length - 1; i >= 0; i--) {
+    const sd = seeds[i];
+    if (NOW - sd.born > sd.life) { seeds.splice(i, 1); continue; }
+    mctx.beginPath();
+    if (sd.shape === 'plus') {
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        mctx.moveTo(sd.x + dx * sd.r * 1.2 + sd.r * 0.75, sd.y + dy * sd.r * 1.2);
+        mctx.arc(sd.x + dx * sd.r * 1.2, sd.y + dy * sd.r * 1.2, sd.r * 0.75, 0, Math.PI * 2);
+      }
+    } else mctx.arc(sd.x, sd.y, sd.r, 0, Math.PI * 2);
+    mctx.fill();
+  }
+  maskEmpty = !active;
+  gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, maskCanvas);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+  return true;
+}
+
+/* ---------- lyrics ---------- */
+const L = { lines: [], timed: false, li: -1, wi: 0, beat: 0, timer: 0, lrcLine: -2, lrcCount: 0, lay: null };
+const TAG = /\[(\d+):(\d+(?:[.:]\d+)?)\]/g;
+function parseLyrics(text) {
+  const out = []; let timed = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const tags = [...raw.matchAll(TAG)];
+    const body = raw.replace(TAG, '').trim();
+    if (tags.length) {
+      timed = true;
+      const ws = body ? body.split(/\s+/) : [];
+      for (const m of tags) out.push({ t: parseInt(m[1], 10) * 60 + parseFloat(m[2].replace(':', '.')), words: ws });
+    } else if (body && !/^\[[a-z]+:/i.test(raw.trim())) {
+      out.push({ t: null, words: body.split(/\s+/) });
+    }
+  }
+  if (timed) {
+    const tl = out.filter((l) => l.t != null).sort((a, b) => a.t - b.t);
+    return { lines: tl, timed: true };
+  }
+  return { lines: out.filter((l) => l.words.length), timed: false };
+}
+function loadLyrics(text, fromUser) {
+  const r = parseLyrics(text);
+  L.lines = r.lines; L.timed = r.timed;
+  if (r.timed && S.mode !== 'lrc' && fromUser) { S.mode = 'lrc'; syncUI(); toast('Found LRC timestamps. Switched to timed lyrics.'); }
+  resetLyrics();
+}
+function resetLyrics() {
+  L.li = -1; L.wi = 0; L.beat = 0; L.timer = 0; L.lrcLine = -2; L.lrcCount = 0; L.lay = null;
+  releaseAll();
+}
+function releaseAll() { for (const w of words) if (w.release == null) w.release = NOW; }
+function startLine(i) {
+  releaseAll();
+  L.li = i; L.wi = 0;
+  const type = S.layout === 'random' ? pick(['stack', 'stack', 'scatter', 'center']) : S.layout;
+  L.lay = { type, x: null, y: null, prev: 0 };
+  if (S.chaos && i > 0) chaosShuffle();
+}
+function nextWord() {
+  if (!L.lines.length) return;
+  if (L.li < 0 || L.wi >= L.lines[L.li].words.length) startLine((L.li + 1) % L.lines.length);
+  const line = L.lines[L.li];
+  if (line.words.length) spawnWord(line.words[L.wi++]);
+}
+function updateLrc(t) {
+  const ls = L.lines; let i = -1;
+  for (let j = 0; j < ls.length; j++) { if (ls[j].t <= t) i = j; else break; }
+  if (i !== L.lrcLine) {
+    L.lrcLine = i; L.lrcCount = 0;
+    if (i < 0) { releaseAll(); return; }
+    startLine(i);
+  }
+  if (i < 0) return;
+  const line = ls[i], n = line.words.length;
+  if (!n) return;
+  const nextT = ls[i + 1] ? ls[i + 1].t : line.t + n * 0.5;
+  const span = Math.max(0.2, Math.min(nextT - line.t, n * 0.42));
+  const target = Math.min(n, Math.floor(((t - line.t) / span) * n) + 1);
+  while (L.lrcCount < target) spawnWord(line.words[L.lrcCount++]);
+}
+function boxesHit(b) {
+  return words.some((w) => w.release == null && !(b.x + b.w < w.box.x || w.box.x + w.box.w < b.x || b.y + b.h < w.box.y || w.box.y + w.box.h < b.y));
+}
+function spawnWord(text) {
+  const font = S.font === 'random' ? pick(FONTS) : FONTS[+S.font];
+  const base = Math.min(SW, SH * 0.75);
+  const lay = L.lay || (L.lay = { type: 'stack', x: null, y: null, prev: 0 });
+  let size = base * rand(0.16, 0.24) * S.wsize * (lay.type === 'center' ? 1.35 : 1);
+  setFont(font, size);
+  let w = mctx.measureText(text).width;
+  const maxW = SW * 0.9;
+  if (w > maxW) { size *= maxW / w; setFont(font, size); w = mctx.measureText(text).width; }
+  let x, y;
+  if (lay.type === 'center') {
+    releaseAll();
+    x = (SW - w) / 2; y = SH * rand(0.38, 0.62);
+  } else if (lay.type === 'scatter') {
+    for (let k = 0; k < 30; k++) {
+      x = rand(SW * 0.03, Math.max(SW * 0.03, SW * 0.97 - w));
+      y = rand(SH * 0.06 + size / 2, SH * 0.94 - size / 2);
+      if (!boxesHit({ x, y: y - size / 2, w, h: size })) break;
+    }
+  } else {
+    if (lay.y == null) {
+      lay.x = rand(0.04, 0.3) * SW; lay.y = rand(0.1, 0.38) * SH + size / 2;
+    } else {
+      lay.y += (lay.prev * 0.5 + size * 0.5) * 0.96;
+      if (lay.y + size / 2 > SH * 0.96) { releaseAll(); lay.y = SH * 0.06 + size / 2; lay.x = rand(0.04, 0.3) * SW; }
+    }
+    x = lay.x + rand(-0.03, 0.06) * SW;
+    y = lay.y; lay.prev = size;
+  }
+  x = clamp(x, SW * 0.02, Math.max(SW * 0.02, SW * 0.98 - w));
+  const rot = (Math.random() * 2 - 1) * (S.tilt * Math.PI / 180);
+  words.push({ text, x, y, size, font, rot, born: NOW, release: null, box: { x, y: y - size / 2, w, h: size } });
+  if (words.length > 24) words.shift();
+}
+
+/* ---------- audio ---------- */
+const audio = $('#song');
+let actx = null, analyser = null, freq = null, recDest = null, songSrc = null, micSrc = null, micStream = null;
+let hasSong = false, playing = true, demoClock = 0, beatPhase = 0;
+let bass = 0, level = 0, avgBass = 0.2, lastBeat = 0, pulse = 0;
+
+function ensureCtx() {
+  if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  actx = new AC();
+  analyser = actx.createAnalyser(); analyser.fftSize = 1024; analyser.smoothingTimeConstant = 0.5;
+  freq = new Uint8Array(analyser.frequencyBinCount);
+  const sink = actx.createGain(); sink.gain.value = 0; analyser.connect(sink); sink.connect(actx.destination);
+  recDest = actx.createMediaStreamDestination();
+}
+function attachSong() {
+  ensureCtx();
+  if (!songSrc) {
+    songSrc = actx.createMediaElementSource(audio);
+    songSrc.connect(actx.destination); songSrc.connect(analyser); songSrc.connect(recDest);
+  }
+}
+$('#file').addEventListener('change', (e) => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  try { attachSong(); } catch (err) { /* context unavailable; analysis falls back to practice beat */ }
+  if (audio.src) URL.revokeObjectURL(audio.src);
+  audio.src = URL.createObjectURL(f);
+  hasSong = true;
+  $('#fileName').textContent = f.name;
+  $('#bpmField').hidden = true;
+  setPlaying(false);
+  restart();
+  toast('Song loaded. Press Play, or Record to make the video.');
+});
+audio.addEventListener('ended', () => { setPlaying(false); if (rec && rec.state === 'recording') stopRec(); });
+
+$('#btnMic').addEventListener('click', async () => {
+  if (micStream) {
+    micStream.getTracks().forEach((t) => t.stop()); micSrc && micSrc.disconnect();
+    micStream = null; micSrc = null; $('#btnMic').classList.remove('on'); $('#btnMic').textContent = 'Use mic'; return;
+  }
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    ensureCtx();
+    micSrc = actx.createMediaStreamSource(micStream);
+    micSrc.connect(analyser); micSrc.connect(recDest);
+    $('#btnMic').classList.add('on'); $('#btnMic').textContent = 'Mic on';
+    toast('Listening to the mic. Play music out loud near your phone.');
+  } catch (err) {
+    micStream = null;
+    toast('The mic isn’t available here. Load a song file instead.');
+  }
+});
+
+function beat(strength = 1) {
+  lastBeat = NOW; pulse = Math.min(1, 0.6 + 0.4 * strength);
+  if (S.seeds) {
+    const n = Math.random() < 0.35 ? 2 : 1;
+    for (let i = 0; i < n; i++) addSeed(rand(0.05, 0.95) * SW, rand(0.05, 0.95) * SH, rand(4, 8), Math.random() < 0.4 ? 'plus' : 'dot');
+  }
+  if (playing && S.mode === 'beat') { L.beat++; if (L.beat % S.bpw === 0) nextWord(); }
+}
+function updateAudio(dt) {
+  const live = (hasSong && playing) || micStream;
+  if (live && analyser) {
+    analyser.getByteFrequencyData(freq);
+    const hz = actx.sampleRate / analyser.fftSize;
+    const hi = Math.max(2, Math.round(160 / hz));
+    let s = 0; for (let i = 1; i <= hi; i++) s += freq[i]; bass = s / hi / 255;
+    let t = 0; const n = Math.min(freq.length, Math.round(6000 / hz)); for (let i = 1; i < n; i++) t += freq[i];
+    level = t / n / 255 * 0.6 + bass * 0.4;
+    avgBass += (bass - avgBass) * Math.min(1, dt * 2.5);
+    if (bass > avgBass * 1.18 + 0.03 && bass > 0.28 && NOW - lastBeat > 0.27) beat(clamp((bass - avgBass) * 4, 0, 1));
+  } else if (playing && !hasSong) {
+    const prev = beatPhase; beatPhase += dt * S.bpm / 60;
+    const frac = beatPhase % 1;
+    level = 0.25 + 0.5 * Math.exp(-frac * 5); bass = level;
+    if (Math.floor(beatPhase) !== Math.floor(prev)) beat(0.8);
+  } else { level *= 0.95; bass *= 0.95; }
+  pulse *= Math.pow(0.02, dt);
+}
+function clock() { return hasSong ? audio.currentTime : demoClock; }
+
+/* ---------- play / restart ---------- */
+function setPlaying(p) {
+  playing = p;
+  $('#icoPlay').toggleAttribute('hidden', p); $('#icoPause').toggleAttribute('hidden', !p); $('#playLabel').textContent = p ? 'Pause' : 'Play';
+  updateTag();
+}
+async function play() {
+  if (hasSong) {
+    try { ensureCtx(); await audio.play(); setPlaying(true); }
+    catch (err) { toast('Tap Play again to start the song.'); }
+  } else setPlaying(true);
+}
+function pause() { if (hasSong) audio.pause(); setPlaying(false); }
+$('#btnPlay').addEventListener('click', () => (playing ? pause() : play()));
+audio.addEventListener('pause', () => { if (hasSong) setPlaying(false); });
+audio.addEventListener('play', () => { if (hasSong) setPlaying(true); });
+
+function restart() {
+  resetSim(true); resetLyrics(); demoClock = 0; beatPhase = 0;
+  if (hasSong) { try { audio.currentTime = 0; } catch (e) { /* not seekable yet */ } }
+}
+$('#btnRestart').addEventListener('click', () => { restart(); play(); });
+$('#btnClear').addEventListener('click', () => resetSim(true));
+
+/* ---------- randomize ---------- */
+function weighted(obj, heavy, wHeavy) { const keys = Object.keys(obj); return Math.random() < wHeavy ? heavy : pick(keys); }
+function chaosShuffle() {
+  if (Math.random() < 0.45) S.preset = pick(['maze', 'maze', 'finger', 'dots', 'worms', 'coral', 'dashes']);
+  if (Math.random() < 0.3) S.invert = !S.invert;
+  if (Math.random() < 0.3) S.palette = weighted(PALETTES, 'mono', 0.4);
+  syncUI();
+}
+function randomize() {
+  S.preset = pick(['maze', 'maze', 'maze', 'finger', 'dots', 'worms', 'coral', 'dashes']);
+  S.palette = weighted(PALETTES, 'mono', 0.45);
+  S.invert = Math.random() < 0.3;
+  S.font = Math.random() < 0.5 ? 'random' : String(Math.floor(Math.random() * FONTS.length));
+  S.layout = pick(['random', 'random', 'stack', 'scatter', 'center']);
+  S.wsize = Math.round(rand(0.8, 1.4) * 20) / 20;
+  S.tilt = Math.random() < 0.6 ? 0 : Math.round(rand(4, 20));
+  S.react = Math.round(rand(0.6, 1.8) * 10) / 10;
+  syncUI();
+  for (let i = 0; i < 6; i++) addSeed(rand(0.05, 0.95) * SW, rand(0.05, 0.95) * SH, rand(5, 10), pick(['plus', 'dot']), 0.25);
+  if (L.lay) L.lay.type = S.layout === 'random' ? pick(['stack', 'scatter', 'center']) : S.layout;
+  pulse = 1;
+}
+$('#btnShuffle').addEventListener('click', randomize);
+
+/* ---------- recording ---------- */
+let rec = null, recChunks = [], recStart = 0, recMime = '', lastVideo = null;
+const downloadsP = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+function pickMime() {
+  if (!window.MediaRecorder) return null;
+  const list = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  return list.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } }) ?? '';
+}
+async function startRec() {
+  const mime = pickMime();
+  if (mime === null || !canvas.captureStream) { toast('This browser can’t record video. Use your phone’s screen recorder with "Hide controls".', null, null, 6000); return; }
+  if (hasSong) { attachSong(); restart(); }
+  const tracks = canvas.captureStream(60).getVideoTracks();
+  if (recDest && (hasSong || micStream)) tracks.push(...recDest.stream.getAudioTracks());
+  try {
+    rec = new MediaRecorder(new MediaStream(tracks), mime ? { mimeType: mime, videoBitsPerSecond: 12_000_000 } : undefined);
+  } catch (err) {
+    rec = new MediaRecorder(new MediaStream(tracks));
+  }
+  recMime = rec.mimeType || mime || 'video/webm';
+  recChunks = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = () => {
+    lastVideo = new Blob(recChunks, { type: recMime });
+    const secs = Math.round((performance.now() - recStart) / 1000);
+    $('#btnRec').classList.remove('recording'); $('#recLabel').textContent = 'Record';
+    toast(`Video ready (${secs} s).`, 'Save video', saveVideo, 0);
+  };
+  rec.start(250); recStart = performance.now();
+  $('#btnRec').classList.add('recording');
+  closeDrawer();
+  await play();
+}
+function stopRec() { if (rec && rec.state !== 'inactive') rec.stop(); if (hasSong) pause(); }
+async function saveVideo() {
+  if (!lastVideo) return;
+  const ext = recMime.includes('mp4') ? 'mp4' : 'webm';
+  const name = `reaction-lyrics-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.${ext}`;
+  const dl = await downloadsP;
+  if (dl) {
+    try { await dl.save({ filename: name, data: lastVideo }); $('#toast').hidden = true; }
+    catch (err) { if (err && err.code !== 'declined') toast('Couldn’t save the video here. Try the page outside the app.', 'Retry', saveVideo, 0); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(lastVideo); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  $('#toast').hidden = true;
+}
+$('#btnRec').addEventListener('click', () => (rec && rec.state === 'recording' ? stopRec() : startRec()));
+
+/* ---------- drawer & UI ---------- */
+const drawer = $('#drawer');
+function openDrawer() { drawer.classList.add('open'); }
+function closeDrawer() { drawer.classList.remove('open'); }
+$('#btnOpen').addEventListener('click', () => (drawer.classList.contains('open') ? closeDrawer() : openDrawer()));
+$('#btnClose').addEventListener('click', closeDrawer);
+
+const app = $('#app');
+function setClean(on) { app.classList.toggle('clean', on); if (on) { closeDrawer(); toast('Press and hold the picture (or press H) to show controls.', null, null, 2500); } }
+$('#btnClean').addEventListener('click', () => setClean(true));
+$('#btnFull').addEventListener('click', async () => {
+  try { await (app.requestFullscreen ? app.requestFullscreen() : app.webkitRequestFullscreen()); }
+  catch (e) { toast('Fullscreen isn’t available here. Use "Hide controls" instead.'); }
+});
+
+const outFmt = {
+  bpm: (v) => `${v} BPM`, interval: (v) => (+v).toFixed(2), wsize: (v) => `${(+v).toFixed(2)}×`, tilt: (v) => `${v}°`,
+  scale: (v) => (+v).toFixed(1), speed: (v) => v, react: (v) => (+v).toFixed(1),
+};
+function syncUI() {
+  document.querySelectorAll('[data-key]').forEach((el) => {
+    const k = el.dataset.key;
+    if (el.type === 'checkbox') el.checked = !!S[k]; else el.value = String(S[k]);
+    const o = document.getElementById('o_' + k); if (o && outFmt[k]) o.textContent = outFmt[k](S[k]);
+  });
+  $('#bpwField').hidden = S.mode !== 'beat';
+  $('#intervalField').hidden = S.mode !== 'timer';
+  updateTag();
+}
+document.querySelectorAll('[data-key]').forEach((el) => {
+  el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
+    const k = el.dataset.key;
+    const prev = S[k];
+    S[k] = el.type === 'checkbox' ? el.checked : (el.type === 'range' || k === 'bpw') ? +el.value : el.value;
+    syncUI();
+    if ((k === 'format' || k === 'scale') && prev !== S[k]) { allocate(); resetLyrics(); }
+    if (k === 'mode') resetLyrics();
+    if (k === 'mode' && S.mode === 'lrc' && !L.timed) toast('Timed mode needs lyrics with [mm:ss.xx] timestamps.', null, null, 5000);
+    save();
+  });
+});
+const lyricsEl = $('#lyrics');
+let lyrTimer = 0;
+lyricsEl.addEventListener('input', () => { clearTimeout(lyrTimer); lyrTimer = setTimeout(() => { loadLyrics(lyricsEl.value, true); save(); }, 400); });
+
+function updateTag() {
+  const tag = $('#tag');
+  const msg = S.mode === 'tap' ? 'Tap the picture to drop the next word' : '';
+  tag.textContent = msg; tag.hidden = !msg || app.classList.contains('clean');
+}
+
+// tap + long-press on the stage
+let pressTimer = 0, pressed = false, longFired = false;
+canvas.addEventListener('pointerdown', () => {
+  pressed = true; longFired = false;
+  pressTimer = setTimeout(() => { longFired = true; if (app.classList.contains('clean')) setClean(false); else setClean(true); }, 650);
+});
+const endPress = () => { clearTimeout(pressTimer); pressed = false; };
+canvas.addEventListener('pointerup', () => {
+  const wasLong = longFired; endPress();
+  if (wasLong) return;
+  if (S.mode === 'tap') { if (!playing) play(); nextWord(); pulse = 1; }
+});
+canvas.addEventListener('pointercancel', endPress);
+canvas.addEventListener('pointerleave', endPress);
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+document.addEventListener('keydown', (e) => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.code === 'Space') { e.preventDefault(); if (S.mode === 'tap') { if (!playing) play(); nextWord(); } else (playing ? pause() : play()); }
+  else if (e.key === 'r' || e.key === 'R') randomize();
+  else if (e.key === 'h' || e.key === 'H') setClean(!app.classList.contains('clean'));
+  else if (e.key === 'Escape') { closeDrawer(); setClean(false); }
+});
+
+/* ---------- persistence (this browser only) ---------- */
+function save() { try { localStorage.setItem('reaction-lyrics', JSON.stringify({ S, lyrics: lyricsEl.value })); } catch (e) { /* storage blocked */ } }
+function restore() {
+  try {
+    const d = JSON.parse(localStorage.getItem('reaction-lyrics') || 'null');
+    if (d && d.S) Object.assign(S, d.S);
+    return d && typeof d.lyrics === 'string' ? d.lyrics : null;
+  } catch (e) { return null; }
+}
+
+/* ---------- main loop ---------- */
+function hex(c) { const n = parseInt(c.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; }
+let lastMs = performance.now(), simAcc = 0;
+function frame(ms) {
+  const dt = Math.min(0.05, Math.max(0, (ms - lastMs) / 1000)); lastMs = ms; NOW = ms / 1000;
+  if (playing && !hasSong) demoClock += dt;
+  updateAudio(dt);
+
+  if (playing) {
+    if (S.mode === 'lrc' && L.timed) updateLrc(clock());
+    else if (S.mode === 'timer') { L.timer += dt; if (L.timer >= S.interval) { L.timer -= S.interval; nextWord(); } }
+  }
+  for (const w of words) if (w.release == null && NOW - w.born > 7) w.release = NOW;
+
+  const masked = drawMask();
+  const pr = PRESETS[S.preset];
+  const k = pr.k + S.react * (level - 0.35) * 0.0008;
+  simAcc += S.speed * (dt * 60) * (1 + S.react * 0.5 * (level - 0.3));
+  let steps = Math.min(48, Math.floor(simAcc)); simAcc -= steps;
+
+  gl.useProgram(P_SIM.p);
+  gl.uniform2i(P_SIM.u.uSize, SW, SH);
+  gl.uniform1f(P_SIM.u.uFeed, pr.f); gl.uniform1f(P_SIM.u.uKill, k);
+  gl.uniform1f(P_SIM.u.uGain, (masked || !maskEmpty) ? 0.5 : 0.0);
+  gl.uniform1i(P_SIM.u.uState, 0); gl.uniform1i(P_SIM.u.uMask, 1);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, maskTex);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.viewport(0, 0, SW, SH);
+  for (let i = 0; i < steps; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo[1 - cur]);
+    gl.bindTexture(gl.TEXTURE_2D, tex[cur]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    cur = 1 - cur;
+  }
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, W, H);
+  gl.useProgram(P_DISP.p);
+  const pal = PALETTES[S.palette];
+  let bg = hex(pal.bg), f1 = hex(pal.fg1), f2 = hex(pal.fg2);
+  if (S.invert) { const t = bg; bg = f1; f1 = t; f2 = t; }
+  gl.uniform3fv(P_DISP.u.uBg, bg); gl.uniform3fv(P_DISP.u.uFg1, f1); gl.uniform3fv(P_DISP.u.uFg2, f2);
+  gl.uniform2i(P_DISP.u.uSize, SW, SH);
+  gl.uniform1f(P_DISP.u.uZoom, pulse * 0.018 * S.react);
+  gl.uniform1f(P_DISP.u.uPulse, pulse);
+  gl.uniform1i(P_DISP.u.uState, 0);
+  gl.bindTexture(gl.TEXTURE_2D, tex[cur]);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  if (rec && rec.state === 'recording') {
+    const s = Math.floor((performance.now() - recStart) / 1000);
+    $('#recLabel').textContent = `Stop ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- boot ---------- */
+const saved = restore();
+lyricsEl.value = saved ?? SAMPLE;
+syncUI();
+allocate();
+loadLyrics(lyricsEl.value, false);
+setPlaying(true);
+const fontLoads = FONTS.map((f) => document.fonts ? document.fonts.load(`${f.weight} 48px "${f.name}"`).catch(() => null) : null);
+Promise.race([Promise.allSettled(fontLoads), new Promise((r) => setTimeout(r, 2500))]).then(() => { if (L.li >= 0) resetLyrics(); });
+if (location.hash === '#debug') window.__rl = { S, L, words, seeds, nextWord, maskCanvas, randomize, setPlaying, startLine };
+requestAnimationFrame((ms) => { lastMs = ms; requestAnimationFrame(frame); });
+})();
+</script>
