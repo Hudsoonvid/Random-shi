@@ -10,3 +10,7 @@ A music visualizer built on Gray-Scott reaction-diffusion. A black-and-white maz
 - **Randomize:** shuffles the pattern, colors, fonts, layout and tilt. Turn on Chaos to reshuffle on every new line.
 - **Record:** restarts the song and saves a video (MP4 or WebM) with the audio. Pick 9:16, 1:1 or 16:9.
 - Keys: `Space` play/pause (or next word in tap mode), `R` randomize, `H` hide controls.
+
+## Grain Drain (`grain-drain/`)
+
+An original falling-sand puzzle. A picture made of colored sand sits over a 6×6 board of trays. Drag (or tap) a tray into the top row and any sand of the same color at the bottom of the picture pours into it. Full trays pop and free up room, and you clear the picture by draining every grain. Six hand-drawn pictures, then it loops with new boards. Open `grain-drain/index.html` in a browser.
