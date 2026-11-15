@@ -1,0 +1,598 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Grain Drain</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
+<style>
+/* Layout: one portrait play field (sand picture over a 6x6 tray board) centred on a dark felt table,
+   with a slim header for level, progress and two icon buttons. Single dark look on purpose. */
+:root {
+  color-scheme: dark;
+  --table: #101319;
+  --panel: #191d27;
+  --chalk: #eef1f6;
+  --dim: #8a93a6;
+  --line: rgba(238, 241, 246, .12);
+  --go: #ffd34d;
+  --round: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+}
+html, body { height: 100%; }
+body { margin: 0; background: var(--table); color: var(--chalk); font-family: var(--round); overflow: hidden;
+  -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+header {
+  display: flex; align-items: center; gap: 12px;
+  padding-block: calc(10px + env(safe-area-inset-top, 0px)) 6px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  max-width: 560px; width: 100%; margin-inline: auto;
+}
+.lvl { min-width: 0; flex: 1; display: grid; gap: 6px; }
+.lvl-name { font-weight: 600; font-size: 17px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lvl-name small { color: var(--dim); font-weight: 500; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin-right: 6px; }
+.meter { height: 8px; border-radius: 99px; background: var(--panel); overflow: hidden; box-shadow: inset 0 0 0 1px var(--line); }
+.meter > i { display: block; height: 100%; width: 0%; background: var(--go); border-radius: 99px; transition: width .25s; }
+.icon { width: 42px; height: 42px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); display: grid; place-items: center; flex: none; }
+.icon svg { width: 20px; height: 20px; }
+.icon:active { transform: scale(.94); }
+
+.stage { position: relative; min-height: 0; display: flex; align-items: flex-start; justify-content: center;
+  padding-block: 4px calc(10px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+#game { display: block; touch-action: none; max-width: 100%; }
+.hint {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 10px;
+  background: rgba(16, 19, 25, .88); border: 1px solid var(--line); border-radius: 14px;
+  padding: 8px 14px; font-size: 14px; font-weight: 500; text-align: center; max-width: calc(100% - 48px);
+  pointer-events: none; transition: opacity .4s;
+}
+.win {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: rgba(10, 12, 16, .62);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.win-card { background: var(--panel); border: 1px solid var(--line); border-radius: 24px; padding: 26px 24px 22px; width: min(340px, 100%);
+  text-align: center; display: grid; gap: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.5); animation: rise .35s cubic-bezier(.2,.9,.3,1.3); }
+.win-card h2 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -.02em; }
+.win-card p { margin: 0 0 8px; color: var(--dim); font-size: 15px; }
+.big { height: 52px; border-radius: 16px; border: 0; background: var(--go); color: #1a1405; font-weight: 600; font-size: 18px; }
+.ghost { height: 44px; border-radius: 14px; border: 1px solid var(--line); background: transparent; font-weight: 500; }
+@keyframes rise { from { transform: translateY(20px) scale(.96); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .win-card { animation: none; } }
+</style>
+
+<div class="app">
+  <header>
+    <div class="lvl">
+      <div class="lvl-name" id="lvlName"><small>Level 1</small>First Light</div>
+      <div class="meter" role="progressbar" aria-label="Sand cleared" aria-valuemin="0" aria-valuemax="100"><i id="meter"></i></div>
+    </div>
+    <button class="icon" id="btnSound" type="button" aria-label="Sound on">
+      <svg id="icoSnd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+      <svg id="icoMute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M17 9l5 6M22 9l-5 6"/></svg>
+    </button>
+    <button class="icon" id="btnRestart" type="button" aria-label="Restart level">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg>
+    </button>
+  </header>
+  <div class="stage" id="stage">
+    <canvas id="game" aria-label="Sand picture and tray board"></canvas>
+    <div class="hint" id="hint">Drag a tray to the top row. Sand of the same color pours in.</div>
+  </div>
+</div>
+
+<div class="win" id="win" hidden>
+  <div class="win-card">
+    <h2 id="winTitle">Picture cleared</h2>
+    <p id="winSub">Every grain drained.</p>
+    <button class="big" id="btnNext" type="button">Next picture</button>
+    <button class="ghost" id="btnReplay" type="button">Play this one again</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s) => document.querySelector(s);
+const rand = (a, b) => a + Math.random() * (b - a);
+const randi = (n) => Math.floor(Math.random() * n);
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = randi(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ---------------- geometry ---------------- */
+const SW = 120, SH = 90, G = 5;              // sand grid, 5 px per grain
+const COLS = 6, ROWS = 6, CS = 100;           // tray board
+const LW = COLS * CS;                          // 600 logical px wide
+const SAND_Y = 10, SAND_H = SH * G;            // sand box
+const BOARD_Y = SAND_Y + SAND_H + 22;          // board top
+const LH = BOARD_Y + ROWS * CS + 10;
+const DRAIN_P = 0.16;                          // chance a matching bottom grain drops per tick
+
+/* ---------------- pictures (original, drawn with canvas shapes) ---------------- */
+function heart(ctx, cx, cy, s) {
+  ctx.beginPath();
+  for (let t = 0; t <= Math.PI * 2 + 0.01; t += 0.05) {
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    ctx[t === 0 ? 'moveTo' : 'lineTo'](cx + x * s, cy - y * s);
+  }
+  ctx.fill();
+}
+const circ = (ctx, x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); };
+const ell = (ctx, x, y, rx, ry, a0 = 0, a1 = Math.PI * 2) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, a0, a1); ctx.fill(); };
+
+const LEVELS = [
+  { name: 'First Light', pal: ['#8fd3ff', '#ffcf3d', '#3fae5a'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[1]; circ(c, 84, 34, 17);
+    c.fillStyle = p[2]; ell(c, 30, 96, 70, 38); ell(c, 100, 104, 60, 36);
+  } },
+  { name: 'Toadstool', pal: ['#1f2a44', '#e5383b', '#ffffff', '#f3e3c3', '#4caf50'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[4]; c.fillRect(0, 76, SW, 14); for (let x = 0; x < SW; x += 8) { c.beginPath(); c.moveTo(x, 77); c.lineTo(x + 4, 70); c.lineTo(x + 8, 77); c.fill(); }
+    c.fillStyle = p[3]; c.beginPath(); c.roundRect(50, 44, 20, 36, 6); c.fill();
+    c.fillStyle = p[1]; ell(c, 60, 50, 40, 32, Math.PI, Math.PI * 2);
+    c.fillStyle = p[2]; circ(c, 44, 36, 6); circ(c, 64, 28, 5); circ(c, 78, 40, 5); circ(c, 32, 46, 3.5); circ(c, 88, 47, 3);
+  } },
+  { name: 'Goldfish', pal: ['#2b6cb0', '#ff8c1a', '#ffffff', '#10131a'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[1]; ell(c, 56, 48, 30, 19);
+    c.beginPath(); c.moveTo(80, 48); c.lineTo(106, 30); c.lineTo(100, 48); c.lineTo(106, 66); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(50, 31); c.lineTo(66, 18); c.lineTo(70, 34); c.fill();
+    c.fillStyle = p[2]; circ(c, 40, 43, 6.5); circ(c, 22, 24, 3.5); circ(c, 15, 12, 2.5); circ(c, 27, 6, 2);
+    c.fillStyle = p[3]; circ(c, 39, 43, 3.2);
+  } },
+  { name: 'Desert Bloom', pal: ['#ffd6c9', '#2f9e6e', '#c8553d', '#ff4fa3'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[1];
+    c.beginPath(); c.roundRect(52, 18, 16, 56, 8); c.fill();
+    c.beginPath(); c.roundRect(32, 36, 22, 10, 5); c.fill(); c.beginPath(); c.roundRect(32, 24, 10, 20, 5); c.fill();
+    c.beginPath(); c.roundRect(66, 44, 22, 10, 5); c.fill(); c.beginPath(); c.roundRect(78, 30, 10, 22, 5); c.fill();
+    c.fillStyle = p[2]; c.beginPath(); c.moveTo(38, 70); c.lineTo(82, 70); c.lineTo(76, 90); c.lineTo(44, 90); c.fill();
+    c.fillStyle = p[3]; circ(c, 60, 16, 6); circ(c, 37, 22, 4); circ(c, 83, 28, 4);
+  } },
+  { name: 'Night Owl', pal: ['#2d1e4a', '#f5e9b8', '#8a5a3b', '#d9b38c', '#10131a', '#ff9f1c'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[1]; circ(c, 98, 18, 11);
+    c.fillStyle = p[2]; ell(c, 56, 56, 30, 34); c.beginPath(); c.moveTo(30, 34); c.lineTo(34, 14); c.lineTo(46, 28); c.fill(); c.beginPath(); c.moveTo(82, 34); c.lineTo(78, 14); c.lineTo(66, 28); c.fill();
+    c.fillStyle = p[3]; ell(c, 56, 66, 18, 20);
+    c.fillStyle = p[1]; circ(c, 45, 40, 9); circ(c, 67, 40, 9);
+    c.fillStyle = p[4]; circ(c, 46, 41, 4.5); circ(c, 66, 41, 4.5);
+    c.fillStyle = p[5]; c.beginPath(); c.moveTo(52, 48); c.lineTo(60, 48); c.lineTo(56, 56); c.fill();
+  } },
+  { name: 'Two Hearts', pal: ['#5c6370', '#e63946'], draw(c, p) {
+    c.fillStyle = p[0]; c.fillRect(0, 0, SW, SH);
+    c.fillStyle = p[1]; heart(c, 76, 34, 1.75); heart(c, 34, 62, 1.1);
+  } },
+];
+
+function hexRgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function rasterize(level) {
+  const cv = document.createElement('canvas'); cv.width = SW; cv.height = SH;
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  level.draw(c, level.pal);
+  const px = c.getImageData(0, 0, SW, SH).data;
+  const pal = level.pal.map(hexRgb);
+  const out = new Uint8Array(SW * SH);
+  for (let i = 0; i < SW * SH; i++) {
+    let best = 0, bd = 1e9;
+    for (let k = 0; k < pal.length; k++) {
+      const dr = px[i * 4] - pal[k][0], dg = px[i * 4 + 1] - pal[k][1], db = px[i * 4 + 2] - pal[k][2];
+      const d = dr * dr + dg * dg + db * db; if (d < bd) { bd = d; best = k; }
+    }
+    out[i] = best + 1;
+  }
+  return out;
+}
+
+/* ---------------- tray shapes ---------------- */
+const BASE_SHAPES = {
+  1: [[[0, 0]]],
+  2: [[[0, 0], [1, 0]]],
+  3: [[[0, 0], [1, 0], [2, 0]], [[0, 0], [0, 1], [1, 1]]],
+  4: [[[0, 0], [1, 0], [2, 0], [3, 0]], [[0, 0], [1, 0], [0, 1], [1, 1]], [[0, 0], [1, 0], [2, 0], [1, 1]],
+      [[0, 0], [0, 1], [0, 2], [1, 2]], [[1, 0], [2, 0], [0, 1], [1, 1]]],
+};
+function rotate(cells, r) {
+  let cs = cells.map(([x, y]) => [x, y]);
+  for (let i = 0; i < r; i++) cs = cs.map(([x, y]) => [-y, x]);
+  const mx = Math.min(...cs.map((c) => c[0])), my = Math.min(...cs.map((c) => c[1]));
+  return cs.map(([x, y]) => [x - mx, y - my]);
+}
+function randomShape(size) { return rotate(BASE_SHAPES[size][randi(BASE_SHAPES[size].length)], randi(4)); }
+
+/* ---------------- state ---------------- */
+let levelIdx = 0, level = LEVELS[0], palRgb = [], shadeTable = [];
+let grid = new Uint8Array(SW * SH), shade = new Uint8Array(SW * SH);
+let remaining = [], totalGrains = 1, trays = [], occ = new Array(COLS * ROWS).fill(null);
+let particles = [], won = false, firstDrain = false, nextId = 1;
+const patterns = {};
+
+function buildShades() {
+  palRgb = level.pal.map(hexRgb);
+  // 32-bit ABGR colours for ImageData, 6 shades per palette entry
+  shadeTable = palRgb.map(([r, g, b]) => [0.82, 0.9, 0.96, 1.0, 1.05, 1.12].map((m) => {
+    const R = Math.min(255, r * m | 0), Gc = Math.min(255, g * m | 0), B = Math.min(255, b * m | 0);
+    return (255 << 24) | (B << 16) | (Gc << 8) | R;
+  }));
+}
+function grainPattern(ctx, color) {
+  if (patterns[color]) return patterns[color];
+  const pc = document.createElement('canvas'); pc.width = pc.height = 40;
+  const p = pc.getContext('2d'); const [r, g, b] = hexRgb(color);
+  for (let y = 0; y < 40; y += 4) for (let x = 0; x < 40; x += 4) {
+    const m = [0.82, 0.9, 0.96, 1, 1.05, 1.12][randi(6)];
+    p.fillStyle = `rgb(${Math.min(255, r * m)},${Math.min(255, g * m)},${Math.min(255, b * m)})`; p.fillRect(x, y, 4, 4);
+  }
+  return (patterns[color] = ctx.createPattern(pc, 'repeat'));
+}
+
+function rebuildOcc() {
+  occ.fill(null);
+  for (const t of trays) if (!t.popT) for (const [cx, cy] of t.cells) occ[(t.y + cy) * COLS + t.x + cx] = t;
+}
+function fits(cells, x, y, ignore) {
+  for (const [cx, cy] of cells) {
+    const gx = x + cx, gy = y + cy;
+    if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS) return false;
+    const o = occ[gy * COLS + gx]; if (o && o !== ignore) return false;
+  }
+  return true;
+}
+
+function loadLevel(i) {
+  levelIdx = i; level = LEVELS[i % LEVELS.length];
+  buildShades();
+  grid = rasterize(level);
+  for (let k = 0; k < shade.length; k++) shade[k] = randi(6);
+  remaining = new Array(level.pal.length + 1).fill(0);
+  for (const c of grid) remaining[c]++;
+  totalGrains = SW * SH;
+  particles = []; won = false;
+  makeTrays();
+  $('#lvlName').innerHTML = '';
+  const sm = document.createElement('small'); sm.textContent = `Level ${i + 1}`;
+  $('#lvlName').append(sm, document.createTextNode(level.name));
+  $('#win').hidden = true;
+  try { localStorage.setItem('grain-drain-level', String(i)); } catch (e) { /* storage blocked */ }
+}
+
+// Trays for every colour add up to at least that colour's grain count, so a level can always be finished.
+function makeTrays() {
+  const colors = level.pal.map((_, k) => k + 1);
+  const free = COLS * (ROWS - 1);            // the top row starts empty
+  let targetCells = Math.min(free - 7, 16 + colors.length * 2);
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const cellCap = Math.ceil(totalGrains / targetCells);
+    const list = [];
+    for (const c of colors) {
+      let need = remaining[c];
+      while (need > 0) {
+        const cellsNeeded = Math.ceil(need / cellCap);
+        let size = cellsNeeded >= 4 ? [2, 3, 3, 4, 4, 4][randi(6)] : cellsNeeded;
+        size = Math.max(1, Math.min(4, size));
+        const cap = Math.min(size * cellCap, need <= size * cellCap ? need : size * cellCap);
+        list.push({ id: nextId++, color: c, cells: randomShape(size), cap, fill: 0, x: 0, y: 0, popT: 0, dx: 0, dy: 0 });
+        need -= cap;
+      }
+    }
+    const used = list.reduce((s, t) => s + t.cells.length, 0);
+    if (used > free - 5) { targetCells = Math.max(6, targetCells - 2); continue; }
+    trays = [];
+    rebuildOcc();
+    let ok = true;
+    for (const t of shuffle(list).sort((a, b) => b.cells.length - a.cells.length)) {
+      let placed = false;
+      for (let k = 0; k < 120 && !placed; k++) {
+        if (k % 30 === 29) t.cells = randomShape(t.cells.length);
+        const x = randi(COLS), y = 1 + randi(ROWS - 1);
+        if (fits(t.cells, x, y, null)) { t.x = x; t.y = y; t.dx = x; t.dy = y; trays.push(t); rebuildOcc(); placed = true; }
+      }
+      if (!placed) { ok = false; break; }
+    }
+    if (ok) return;
+    targetCells = Math.max(6, targetCells - 1);
+  }
+}
+
+/* ---------------- sand simulation ---------------- */
+let flip = false, drainedFrame = 0;
+function tick() {
+  flip = !flip;
+  const yb = SH - 1;
+  for (let x = 0; x < SW; x++) {
+    const i = yb * SW + x, c = grid[i];
+    if (!c) continue;
+    const t = occ[Math.floor(x * COLS / SW)];
+    if (t && t !== drag.tray && t.color === c && t.fill < t.cap && Math.random() < DRAIN_P) {
+      grid[i] = 0; t.fill++; remaining[c]--; drainedFrame++;
+      if (particles.length < 500 && Math.random() < 0.6) particles.push({ x: x * G + G / 2, y: SAND_Y + SAND_H, vy: rand(1, 3), c, life: 1 });
+    }
+  }
+  for (let y = SH - 2; y >= 0; y--) {
+    const row = y * SW;
+    for (let n = 0; n < SW; n++) {
+      const x = flip ? n : SW - 1 - n;
+      const i = row + x, c = grid[i];
+      if (!c) continue;
+      const b = i + SW;
+      if (!grid[b]) { grid[b] = c; shade[b] = shade[i]; grid[i] = 0; continue; }
+      const d = Math.random() < 0.5 ? -1 : 1;
+      for (const s of [d, -d]) {
+        const nx = x + s;
+        if (nx < 0 || nx >= SW) continue;
+        const j = b + s;
+        if (!grid[j] && !grid[i + s]) { grid[j] = c; shade[j] = shade[i]; grid[i] = 0; break; }
+      }
+    }
+  }
+}
+
+/* ---------------- canvas ---------------- */
+const cv = $('#game'), ctx = cv.getContext('2d');
+const sandCv = document.createElement('canvas'); sandCv.width = SW; sandCv.height = SH;
+const sctx = sandCv.getContext('2d');
+const sandImg = sctx.createImageData(SW, SH);
+const sand32 = new Uint32Array(sandImg.data.buffer);
+let scale = 1;
+function fit() {
+  const st = $('#stage').getBoundingClientRect();
+  const cs = getComputedStyle($('#stage'));
+  const availW = st.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const availH = st.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  scale = Math.max(0.3, Math.min(availW / LW, availH / LH));
+  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  cv.style.width = `${LW * scale}px`; cv.style.height = `${LH * scale}px`;
+  cv.width = Math.round(LW * scale * dpr); cv.height = Math.round(LH * scale * dpr);
+  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+}
+addEventListener('resize', fit);
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function trayPath(t, px, py, inset, r) {
+  const p = new Path2D();
+  const set = new Set(t.cells.map(([x, y]) => x + ',' + y));
+  for (const [cx, cy] of t.cells) {
+    const x = px + cx * CS, y = py + cy * CS;
+    p.roundRect(x + inset, y + inset, CS - inset * 2, CS - inset * 2, r);
+    if (set.has((cx + 1) + ',' + cy)) p.rect(x + CS - inset - r, y + inset, inset * 2 + r * 2, CS - inset * 2);
+    if (set.has(cx + ',' + (cy + 1))) p.rect(x + inset, y + CS - inset - r, CS - inset * 2, inset * 2 + r * 2);
+    if (set.has((cx + 1) + ',' + cy) && set.has(cx + ',' + (cy + 1)) && set.has((cx + 1) + ',' + (cy + 1)))
+      p.rect(x + CS - inset - r, y + CS - inset - r, inset * 2 + r * 2, inset * 2 + r * 2);
+  }
+  return p;
+}
+function lum(hex) { const [r, g, b] = hexRgb(hex); return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255; }
+function mixHex(hex, to, k) { const a = hexRgb(hex), b = hexRgb(to); return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',')})`; }
+function shadeHex(hex, m) { const [r, g, b] = hexRgb(hex); return `rgb(${Math.min(255, r * m) | 0},${Math.min(255, g * m) | 0},${Math.min(255, b * m) | 0})`; }
+
+function drawTray(t, now) {
+  const col = level.pal[t.color - 1];
+  let px = t.dx * CS, py = BOARD_Y + t.dy * CS, s = 1, alpha = 1;
+  if (t.popT) { const k = Math.min(1, (now - t.popT) / 320); s = 1 + k * 0.18; alpha = 1 - k; }
+  const lifted = drag.tray === t;
+  const minX = Math.min(...t.cells.map((c) => c[0])), maxX = Math.max(...t.cells.map((c) => c[0])) + 1;
+  const minY = Math.min(...t.cells.map((c) => c[1])), maxY = Math.max(...t.cells.map((c) => c[1])) + 1;
+  ctx.save(); ctx.globalAlpha = alpha;
+  if (s !== 1) {
+    const cx = px + (minX + maxX) / 2 * CS, cy = py + (minY + maxY) / 2 * CS;
+    ctx.translate(cx, cy); ctx.scale(s, s); ctx.translate(-cx, -cy);
+  }
+  if (lifted) { ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 10; }
+  const outer = trayPath(t, px, py, 5, 16);
+  const dark = lum(col) < 0.3;
+  ctx.fillStyle = dark ? mixHex(col, '#ffffff', 0.22) : shadeHex(col, 0.62); ctx.fill(outer);
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = dark ? mixHex(col, '#ffffff', 0.38) : shadeHex(col, 0.88);
+  ctx.save(); ctx.translate(0, -5); ctx.fill(trayPath(t, px, py, 5, 16)); ctx.restore();
+  const well = trayPath(t, px, py - 5, 17, 9);
+  ctx.fillStyle = dark ? mixHex(col, '#000000', 0.15) : 'rgba(10,12,18,.72)'; ctx.fill(well);
+  const frac = t.cap ? t.fill / t.cap : 0;
+  if (frac > 0) {
+    ctx.save(); ctx.clip(well);
+    const top = py - 5 + minY * CS + 17, bot = py - 5 + maxY * CS - 17;
+    const h = (bot - top) * frac;
+    ctx.fillStyle = grainPattern(ctx, col);
+    ctx.fillRect(px, bot - h, LW, h + 2);
+    ctx.restore();
+  }
+  if (lifted) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke(trayPath(t, px, py - 5, 4, 17)); }
+  // percent label in the lowest-right cell
+  const lab = t.cells.reduce((a, c) => (c[1] > a[1] || (c[1] === a[1] && c[0] > a[0]) ? c : a));
+  ctx.font = '600 17px Fredoka, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillText(`${Math.floor(frac * 100)}%`, px + lab[0] * CS + CS - 21, py + lab[1] * CS + CS - 19);
+  ctx.fillStyle = '#fff'; ctx.fillText(`${Math.floor(frac * 100)}%`, px + lab[0] * CS + CS - 22, py + lab[1] * CS + CS - 21);
+  ctx.restore();
+}
+
+function draw(now) {
+  ctx.clearRect(0, 0, LW, LH);
+  // sand box
+  ctx.fillStyle = '#0b0d12'; rr(-6, SAND_Y - 6, LW + 12, SAND_H + 12, 18); ctx.fill();
+  ctx.fillStyle = '#161a23'; rr(0, SAND_Y, LW, SAND_H, 12); ctx.fill();
+  for (let i = 0; i < SW * SH; i++) { const c = grid[i]; sand32[i] = c ? shadeTable[c - 1][shade[i]] : 0; }
+  sctx.putImageData(sandImg, 0, 0);
+  ctx.save(); rr(0, SAND_Y, LW, SAND_H, 12); ctx.clip();
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(sandCv, 0, SAND_Y, LW, SAND_H); ctx.restore();
+  // funnel lip with a drain slot per column
+  ctx.fillStyle = '#0b0d12'; ctx.fillRect(-6, SAND_Y + SAND_H, LW + 12, BOARD_Y - SAND_Y - SAND_H);
+  for (let c = 0; c < COLS; c++) {
+    const t = occ[c];
+    const live = t && t !== drag.tray && !t.popT;
+    const lc = live && level.pal[t.color - 1];
+    ctx.fillStyle = live ? (lum(lc) < 0.3 ? mixHex(lc, '#ffffff', 0.4) : lc) : '#262b37';
+    rr(c * CS + 14, SAND_Y + SAND_H + 7, CS - 28, 8, 4); ctx.fill();
+  }
+  // board
+  ctx.fillStyle = '#191d27'; rr(-6, BOARD_Y - 4, LW + 12, ROWS * CS + 12, 18); ctx.fill();
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    ctx.fillStyle = y === 0 ? '#262c3a' : ((x + y) & 1 ? '#20242f' : '#1d212b');
+    rr(x * CS + 4, BOARD_Y + y * CS + 4, CS - 8, CS - 8, 12); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.07)';
+  for (let x = 0; x < COLS; x++) { const cx = x * CS + CS / 2, cy = BOARD_Y + CS / 2; ctx.beginPath(); ctx.moveTo(cx - 14, cy - 8); ctx.lineTo(cx + 14, cy - 8); ctx.lineTo(cx, cy + 10); ctx.fill(); }
+  // trays (dragged one last)
+  for (const t of trays) if (t !== drag.tray) drawTray(t, now);
+  if (drag.tray) drawTray(drag.tray, now);
+  // grains falling into trays
+  for (const p of particles) {
+    ctx.fillStyle = shadeHex(level.pal[p.c - 1], 1); ctx.globalAlpha = Math.min(1, p.life * 1.4);
+    ctx.fillRect(p.x - 2.5, p.y, 5, 5);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ---------------- input: drag trays along free cells ---------------- */
+const drag = { tray: null, reach: null, sx: 0, sy: 0, t0: 0, moved: false, ox: 0, oy: 0 };
+function toLogical(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * LW / r.width, (e.clientY - r.top) * LH / r.height]; }
+function reachable(t) {
+  const seen = new Map(); const q = [[t.x, t.y]]; seen.set(t.x + ',' + t.y, [t.x, t.y]);
+  while (q.length) {
+    const [x, y] = q.shift();
+    for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + ax, ny = y + ay, k = nx + ',' + ny;
+      if (!seen.has(k) && fits(t.cells, nx, ny, t)) { seen.set(k, [nx, ny]); q.push([nx, ny]); }
+    }
+  }
+  return [...seen.values()];
+}
+cv.addEventListener('pointerdown', (e) => {
+  audioInit();
+  if (won) return;
+  const [lx, ly] = toLogical(e);
+  const gx = Math.floor(lx / CS), gy = Math.floor((ly - BOARD_Y) / CS);
+  if (gx < 0 || gy < 0 || gx >= COLS || gy >= ROWS) return;
+  const t = occ[gy * COLS + gx]; if (!t || t.popT) return;
+  cv.setPointerCapture(e.pointerId);
+  Object.assign(drag, { tray: t, reach: reachable(t), sx: lx, sy: ly, t0: performance.now(), moved: false, ox: t.x, oy: t.y });
+});
+cv.addEventListener('pointermove', (e) => {
+  if (!drag.tray) return;
+  const [lx, ly] = toLogical(e);
+  const fx = drag.ox + (lx - drag.sx) / CS, fy = drag.oy + (ly - drag.sy) / CS;
+  if (Math.hypot(lx - drag.sx, ly - drag.sy) > 10) drag.moved = true;
+  let best = null, bd = 1e9;
+  for (const [x, y] of drag.reach) { const d = (x - fx) ** 2 + (y - fy) ** 2; if (d < bd) { bd = d; best = [x, y]; } }
+  drag.tray.x = best[0]; drag.tray.y = best[1];
+});
+function endDrag() {
+  const t = drag.tray; if (!t) return;
+  if (!drag.moved && performance.now() - drag.t0 < 400) {
+    // tap: send the tray as high as it can go, staying close to its column
+    let best = null;
+    for (const [x, y] of drag.reach) if (!best || y < best[1] || (y === best[1] && Math.abs(x - drag.ox) < Math.abs(best[0] - drag.ox))) best = [x, y];
+    t.x = best[0]; t.y = best[1];
+  }
+  drag.tray = null; drag.reach = null;
+  rebuildOcc();
+  if (t.x !== drag.ox || t.y !== drag.oy) blip(330 + t.y * 10, 0.05);
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', endDrag);
+
+/* ---------------- sound ---------------- */
+let ac = null, hissGain = null, muted = false;
+try { muted = localStorage.getItem('grain-drain-muted') === '1'; } catch (e) { /* storage blocked */ }
+function audioInit() {
+  if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < 0.3 ? 1 : 0.25);
+    const src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 3200; bp.Q.value = 0.7;
+    hissGain = ac.createGain(); hissGain.gain.value = 0;
+    src.connect(bp); bp.connect(hissGain); hissGain.connect(ac.destination); src.start();
+  } catch (e) { ac = null; }
+}
+function blip(f, vol = 0.12, dur = 0.12, f2) {
+  if (!ac || muted) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime;
+  o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f2 || f * 0.6, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function popSound() { blip(620, 0.16, 0.14, 300); setTimeout(() => blip(940, 0.08, 0.1, 700), 40); }
+function syncSoundIcon() {
+  $('#icoSnd').toggleAttribute('hidden', muted); $('#icoMute').toggleAttribute('hidden', !muted);
+  $('#btnSound').setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
+}
+$('#btnSound').addEventListener('click', () => {
+  muted = !muted; audioInit(); syncSoundIcon();
+  try { localStorage.setItem('grain-drain-muted', muted ? '1' : '0'); } catch (e) { /* storage blocked */ }
+});
+
+/* ---------------- loop ---------------- */
+let lastMs = 0, acc = 0;
+function frame(ms) {
+  const dt = Math.min(0.05, (ms - lastMs) / 1000 || 0); lastMs = ms;
+  const now = ms;
+  drainedFrame = 0;
+  acc += dt * 120;                      // 120 sand ticks per second
+  let n = Math.min(6, Math.floor(acc)); acc -= n;
+  while (n--) tick();
+
+  // trays that are full, or whose colour has run out, pop
+  for (const t of trays) {
+    if (t.popT || t === drag.tray) continue;
+    if (t.fill >= t.cap || remaining[t.color] <= 0) {
+      t.popT = now; rebuildOcc(); popSound();
+      if (navigator.vibrate) { try { navigator.vibrate(18); } catch (e) { /* not allowed */ } }
+      for (let k = 0; k < 26; k++) {
+        const [cx, cy] = t.cells[randi(t.cells.length)];
+        particles.push({ x: (t.x + cx) * CS + rand(15, 85), y: BOARD_Y + (t.y + cy) * CS + rand(15, 85), vy: rand(-6, -2), vx: rand(-3, 3), c: t.color, life: 1, burst: true });
+      }
+    }
+  }
+  trays = trays.filter((t) => !t.popT || now - t.popT < 340);
+
+  // ease drawn tray positions toward their cells
+  const ease = 1 - Math.pow(0.0005, dt);
+  for (const t of trays) { t.dx += (t.x - t.dx) * ease; t.dy += (t.y - t.dy) * ease; }
+
+  for (const p of particles) {
+    if (p.burst) { p.x += p.vx; p.y += p.vy; p.vy += 0.35; p.life -= dt * 1.6; }
+    else { p.y += p.vy; p.vy += 0.6; p.life -= dt * 3.2; }
+  }
+  particles = particles.filter((p) => p.life > 0);
+
+  if (drainedFrame && !firstDrain) { firstDrain = true; $('#hint').style.opacity = '0'; }
+  if (ac && hissGain) hissGain.gain.setTargetAtTime(muted ? 0 : Math.min(0.16, drainedFrame * 0.006), ac.currentTime, 0.06);
+
+  let left = 0; for (let c = 1; c < remaining.length; c++) left += remaining[c];
+  const pct = Math.round((1 - left / totalGrains) * 100);
+  $('#meter').style.width = pct + '%';
+  if (!left && !won) { won = true; setTimeout(showWin, 700); }
+
+  draw(now);
+  requestAnimationFrame(frame);
+}
+function showWin() {
+  $('#winTitle').textContent = `${level.name} cleared`;
+  $('#winSub').textContent = `Level ${levelIdx + 1} done. Every grain drained.`;
+  $('#win').hidden = false;
+  blip(523, 0.12, 0.18, 523); setTimeout(() => blip(659, 0.12, 0.18, 659), 120); setTimeout(() => blip(784, 0.14, 0.3, 784), 240);
+}
+$('#btnNext').addEventListener('click', () => loadLevel(levelIdx + 1));
+$('#btnReplay').addEventListener('click', () => loadLevel(levelIdx));
+$('#btnRestart').addEventListener('click', () => { audioInit(); loadLevel(levelIdx); });
+
+/* ---------------- boot ---------------- */
+let start = 0;
+try { start = Math.max(0, parseInt(localStorage.getItem('grain-drain-level') || '0', 10) || 0); } catch (e) { /* storage blocked */ }
+syncSoundIcon();
+fit();
+loadLevel(start);
+if (start > 0) { firstDrain = true; $('#hint').style.opacity = '0'; }
+if (location.hash === '#debug') window.__gd = { get trays() { return trays; }, get remaining() { return remaining; }, loadLevel, rebuildOcc, reachable, fits, drainAll() { grid.fill(0); remaining.fill(0); } };
+if (document.fonts) document.fonts.ready.then(fit);
+requestAnimationFrame((ms) => { lastMs = ms; requestAnimationFrame(frame); });
+})();
+</script>
