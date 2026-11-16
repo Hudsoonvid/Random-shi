@@ -70,21 +70,23 @@ summary { cursor: pointer; color: var(--dim); }
 .songbar b { color: var(--ink); font-weight: 500; }
 .msg { color: var(--rec); margin: 0; }
 
-.notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
-.note { background: var(--panel); border-radius: 12px; padding: 12px; display: grid; gap: 10px; border: 1px solid transparent; min-width: 0; align-content: start; }
-.note.live { border-color: var(--rec); }
-.note-top { display: flex; align-items: center; gap: 10px; }
-.chip { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 500 14px var(--mono); color: #10161b; flex: none; }
-.note.todo .chip { background: transparent !important; color: var(--ink); border: 2px dashed currentColor; }
-.note-meta { min-width: 0; font-size: 12px; color: var(--dim); font-family: var(--mono); line-height: 1.45; }
-.note-meta b { display: block; color: var(--ink); font: 700 15px var(--body); }
-.status { font-size: 13px; min-height: 40px; color: var(--dim); }
-.status.good { color: var(--ok); }
-.status.bad { color: var(--rec); }
+.parts { display: grid; gap: 8px; }
+.part { background: var(--panel); border-radius: 12px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; border: 1px solid transparent; }
+.part.live { border-color: var(--rec); }
+.chip { width: 36px; height: 36px; border-radius: 50%; flex: none; display: grid; place-items: center; font: 500 13px var(--mono); color: #10161b; }
+.part.todo .chip { background: transparent !important; color: var(--ink); border: 2px dashed currentColor; }
+.part-meta { flex: 1 1 190px; min-width: 0; font: 12px/1.45 var(--mono); color: var(--dim); }
+.part-meta b { display: block; color: var(--ink); font: 700 15px var(--body); overflow-wrap: anywhere; }
+.part-meta .good { color: var(--ok); } .part-meta .bad { color: var(--rec); }
+.part input[type=range] { width: 90px; accent-color: var(--gold); }
+.part input[type=number] { width: 56px; padding: 6px 8px; }
+.now { background: var(--panel); border-radius: 12px; padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.now-note { font: 800 44px/1 var(--display); min-width: 3ch; font-variant-numeric: tabular-nums; }
+.now-side { flex: 1 1 200px; min-width: 0; display: grid; gap: 8px; color: var(--dim); font-size: 13px; }
 .meter { height: 8px; border-radius: 4px; background: var(--well); position: relative; overflow: hidden; }
 .meter::before { content: ""; position: absolute; left: 37.5%; width: 25%; top: 0; bottom: 0; background: rgba(111, 214, 162, .28); }
 .meter i { position: absolute; top: 0; bottom: 0; width: 4px; margin-left: -2px; left: 50%; background: var(--ink); border-radius: 2px; opacity: 0; transition: left .08s linear; }
-.meter b { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--rec); width: 0; }
+input[type=range] { accent-color: var(--gold); }
 
 .rollwrap { background: var(--well); border-radius: 12px; overflow-x: auto; position: relative; }
 .rollin { position: relative; }
@@ -97,7 +99,7 @@ audio { width: 100%; }
 <main>
   <header>
     <h1>Choir <span>of One</span></h1>
-    <p class="lede">Load a song, sing each of its notes once, and every note you sang gets pasted into place to build the whole song out of your voice.</p>
+    <p class="lede">Load a song, sing each instrument's part one at a time while the notes scroll past, and all your takes get layered in time into the whole song.</p>
   </header>
 
   <section class="step">
@@ -113,63 +115,69 @@ audio { width: 100%; }
     <div class="songbar" id="songbar"></div>
     <details>
       <summary>Or type the notes</summary>
-      <p class="hint">Write notes like <code>C4 D4 E4:2 F#4:.5 R:1</code>. The number after the colon is the length in beats (1 if left out), <code>R</code> is a rest, <code>C4+E4+G4</code> is a chord. A line with only <code>---</code> starts another voice from the beginning.</p>
+      <p class="hint">Write notes like <code>C4 D4 E4:2 F#4:.5 R:1</code>. The number after the colon is the length in beats (1 if left out), <code>R</code> is a rest, <code>C4+E4+G4</code> is a chord. A line with only <code>---</code> starts the next instrument from the beginning.</p>
       <textarea id="text" spellcheck="false"></textarea>
       <div class="row"><button id="useText">Use these notes</button></div>
     </details>
   </section>
 
   <section class="step">
-    <div class="step-head"><h2>2. Your notes</h2><p id="progress"></p></div>
+    <div class="step-head"><h2>2. Sing each instrument</h2><p id="progress"></p></div>
+    <p class="hint">Wear headphones so the guide doesn't leak into your take. Record gives you a four-beat count-in, then follow the big note and the moving line. "Octave" moves a part to where you can sing it.</p>
     <div class="row">
-      <button class="rec" id="recAll">Record the missing notes</button>
-      <p class="hint">You hear the note first, then sing it and hold it until the bar fills. If the notes are too high or low, shift the key above (−12 drops an octave).</p>
+      <span class="hint">While recording, play:</span>
+      <label class="field"><input type="checkbox" id="gClick" checked> Click</label>
+      <label class="field"><input type="checkbox" id="gNotes" checked> This part's notes</label>
+      <label class="field"><input type="checkbox" id="gOthers" checked> The other parts</label>
     </div>
-    <div class="notes" id="notes"></div>
+    <div class="parts" id="parts"></div>
   </section>
 
-  <section class="step">
+  <section class="step" id="collage">
     <div class="step-head"><h2>3. The collage</h2><p>Filled blocks are your voice. Outlined ones aren't recorded yet.</p></div>
+    <div class="now" id="now" hidden>
+      <div class="now-note" id="nowNote">–</div>
+      <div class="now-side"><div id="nowText"></div><div class="meter"><i id="needle"></i></div></div>
+    </div>
     <div class="rollwrap" id="rollwrap"><div class="rollin"><canvas id="roll"></canvas><div class="cursor" id="cursor"></div></div></div>
     <div class="row">
       <button class="primary" id="play">Play collage</button>
       <button id="save">Save as WAV</button>
       <span class="grow"></span>
-      <label class="field"><input type="checkbox" id="tune" checked> Tune my notes to pitch</label>
-      <label class="field"><input type="checkbox" id="fill" checked> Synth fills in missing notes</label>
+      <label class="field"><input type="checkbox" id="fill" checked> Synth plays unrecorded parts</label>
+      <label class="field">Voice timing <input type="range" id="nudge" min="-300" max="300" step="5" value="0"> <span id="nudgeV">0 ms</span></label>
     </div>
+    <p class="hint">If your voice sounds late against the beat, drag "Voice timing" left; if early, right.</p>
   </section>
 </main>
 
 <script>
 'use strict';
 const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
 const noteName = m => NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1);
 const freq = m => 440 * Math.pow(2, (m - 69) / 12);
-const hue = m => `hsl(${(((m % 12) + 12) % 12) * 30 + 8} 72% 64%)`;
+const hue = i => `hsl(${(i * 67 + 8) % 360} 72% 64%)`;
 
 /* ---------- state ---------- */
-let song = { title: '', notes: [] };   // notes: {midi, start, dur} in beats, before key shift
-const recs = new Map();                // midi (after shift) -> {buf, start, end, f0, gain, peaks}
-let ac = null, stream = null, analyser = null;
-let busy = false, stopFlag = false, playing = null;
-const cards = new Map();
+// parts: {name, notes:[{midi,start,dur}] in beats, oct, vol, take:{buf, off, gain, bpm}|null}
+let song = { title: '', parts: [] };
+let ac = null, stream = null, analyser = null, lat = 0, cap = null, tr = null;
 
 const bpm = () => Math.min(300, Math.max(30, +$('bpm').value || 110));
-const shift = () => Math.round(+$('shift').value || 0);
-const notes = () => song.notes.map(n => ({ midi: n.midi + shift(), start: n.start, dur: n.dur }));
 const beat = () => 60 / bpm();
+const shift = () => Math.round(+$('shift').value || 0);
+const pnotes = i => song.parts[i].notes.map(n => ({ midi: n.midi + shift() + 12 * song.parts[i].oct, start: n.start, dur: n.dur }));
+const totalBeats = () => Math.max(...song.parts.map(p => Math.max(...p.notes.map(n => n.start + n.dur))));
 
-/* ---------- parsing ---------- */
+/* ---------- parsing: each returns {parts:[{name, notes}], tempo, title} ---------- */
 const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 function parseText(text) {
-  const out = []; let pos = 0;
+  const parts = [[]]; let pos = 0;
   for (const raw of text.split('\n')) {
     const line = raw.trim();
-    if (/^-{3,}$/.test(line)) { pos = 0; continue; }
+    if (/^-{3,}$/.test(line)) { pos = 0; parts.push([]); continue; }
     for (const tok of line.split(/[\s|,]+/).filter(Boolean)) {
       const [names, len] = tok.split(':');
       const dur = len === undefined ? 1 : parseFloat(len);
@@ -179,12 +187,12 @@ function parseText(text) {
         if (!m) throw new Error(`Can't read the note "${nm}". Write it like C4 or F#3.`);
         let midi = STEP[m[1].toUpperCase()] + (+m[3] + 1) * 12;
         for (const a of m[2]) midi += (a === '#' || a === '♯') ? 1 : -1;
-        out.push({ midi, start: pos, dur });
+        parts[parts.length - 1].push({ midi, start: pos, dur });
       }
       pos += dur;
     }
   }
-  return out;
+  return { parts: parts.map((notes, i) => ({ name: 'Part ' + (i + 1), notes })) };
 }
 
 function parseMusicXML(text) {
@@ -204,17 +212,19 @@ function parseMusicXML(text) {
       tempo = parseFloat(pm.textContent) * k * (pm.parentNode.querySelector('beat-unit-dot') ? 1.5 : 1);
     }
   }
-  const out = [];
+  const names = {};
+  for (const sp of doc.querySelectorAll('part-list score-part')) { const n = kid(sp, 'part-name'); names[sp.getAttribute('id')] = n ? n.textContent.trim() : ''; }
+  const parts = [];
   for (const part of doc.querySelectorAll('score-partwise > part')) {
-    let div = 1, t0 = 0, trans = 0; const open = new Map();
+    let div = 1, t0 = 0, trans = 0; const open = new Map(), out = [];
     for (const measure of part.children) {
       if (measure.tagName !== 'measure') continue;
       let pos = 0, far = 0, last = 0;
       for (const el of measure.children) {
         if (el.tagName === 'attributes') {
           if (kid(el, 'divisions')) div = num(el, 'divisions') || 1;
-          const tr = kid(el, 'transpose');
-          if (tr) trans = num(tr, 'chromatic') + 12 * num(tr, 'octave-change');
+          const t = kid(el, 'transpose');
+          if (t) trans = num(t, 'chromatic') + 12 * num(t, 'octave-change');
         } else if (el.tagName === 'backup') pos -= num(el, 'duration') / div;
         else if (el.tagName === 'forward') pos += num(el, 'duration') / div;
         else if (el.tagName === 'note') {
@@ -237,9 +247,10 @@ function parseMusicXML(text) {
       }
       t0 += far;
     }
+    parts.push({ name: names[part.getAttribute('id')] || 'Part ' + (parts.length + 1), notes: out });
   }
   const title = doc.querySelector('work-title, movement-title');
-  return { notes: out, tempo, title: title ? title.textContent.trim() : '' };
+  return { parts, tempo, title: title ? title.textContent.trim() : '' };
 }
 
 async function readMxl(buf) {
@@ -278,11 +289,11 @@ function parseMidi(buf) {
   if (tag() !== 'MThd') throw new Error("That isn't a MIDI file.");
   const hl = d.getUint32(p), tracks = d.getUint16(p + 6), div = d.getUint16(p + 8); p += 4 + hl;
   if (div & 0x8000) throw new Error("This MIDI file uses a timing format that isn't supported.");
-  const out = []; let tempo = null;
+  const parts = new Map(); let tempo = null;
   for (let t = 0; t < tracks && p < d.byteLength; t++) {
     const id = tag(), len = d.getUint32(p); p += 4; const end = p + len;
     if (id !== 'MTrk') { p = end; continue; }
-    let tick = 0, status = 0; const open = new Map();
+    let tick = 0, status = 0, name = ''; const open = new Map(), mine = [];
     while (p < end) {
       tick += vlq();
       if (d.getUint8(p) & 128) status = d.getUint8(p++);
@@ -290,6 +301,7 @@ function parseMidi(buf) {
       if (status === 0xff) {
         const mt = d.getUint8(p++), l = vlq();
         if (mt === 0x51 && tempo === null) tempo = 6e7 / ((d.getUint8(p) << 16) | (d.getUint8(p + 1) << 8) | d.getUint8(p + 2));
+        if (mt === 0x03 && !name) name = new TextDecoder().decode(new Uint8Array(buf, p, l)).trim();
         p += l;
       } else if (status === 0xf0 || status === 0xf7) p += vlq();
       else if (type === 0x90 || type === 0x80) {
@@ -297,13 +309,18 @@ function parseMidi(buf) {
         if (type === 0x90 && vel > 0) { if (!open.has(k)) open.set(k, tick); }
         else if (open.has(k)) {
           const s = open.get(k); open.delete(k);
-          if (ch !== 9 && tick > s) out.push({ midi: key, start: s / div, dur: (tick - s) / div });
+          if (ch !== 9 && tick > s) {
+            const pk = t + '/' + ch;
+            if (!parts.has(pk)) { parts.set(pk, { name: '', notes: [] }); mine.push(parts.get(pk)); }
+            parts.get(pk).notes.push({ midi: key, start: s / div, dur: (tick - s) / div });
+          }
         }
       } else p += (type === 0xc0 || type === 0xd0) ? 1 : 2;
     }
+    mine.forEach((m, i) => m.name = name ? name + (mine.length > 1 ? ' ' + (i + 1) : '') : '');
     p = end;
   }
-  return { notes: out, tempo };
+  return { parts: [...parts.values()].map((x, i) => ({ name: x.name || 'Track ' + (i + 1), notes: x.notes })), tempo };
 }
 
 async function openFile(file) {
@@ -312,22 +329,28 @@ async function openFile(file) {
   if (head[0] === 0x4d && head[1] === 0x54) res = parseMidi(buf);
   else if (head[0] === 0x50 && head[1] === 0x4b) res = parseMusicXML(await readMxl(buf));
   else res = parseMusicXML(new TextDecoder().decode(buf));
-  setSong(res.notes, res.title || file.name.replace(/\.[^.]+$/, ''), res.tempo);
+  setSong(res, res.title || file.name.replace(/\.[^.]+$/, ''));
 }
 
-function setSong(list, title, tempo) {
-  list = list.filter(n => n.dur > 0 && n.midi >= 21 && n.midi <= 108);
-  if (!list.length) throw new Error('No pitched notes found in that song.');
-  const t0 = Math.min(...list.map(n => n.start));
-  list.forEach(n => n.start -= t0);
-  list.sort((a, b) => a.start - b.start || a.midi - b.midi);
-  song = { title, notes: list };
-  if (tempo) $('bpm').value = Math.round(tempo);
-  stopPlay(); refresh();
+function setSong(res, title) {
+  const parts = res.parts.map(p => ({ name: p.name, ui: null, oct: 0, vol: 1, take: null, notes: p.notes.filter(n => n.dur > 0 && n.midi >= 21 && n.midi <= 108) })).filter(p => p.notes.length);
+  if (!parts.length) throw new Error('No pitched notes found in that song.');
+  const t0 = Math.min(...parts.map(p => Math.min(...p.notes.map(n => n.start))));
+  parts.forEach(p => { p.notes.forEach(n => n.start -= t0); p.notes.sort((a, b) => a.start - b.start || a.midi - b.midi); });
+  stop(true);
+  song = { title, parts };
+  if (res.tempo) $('bpm').value = Math.round(res.tempo);
+  refresh();
 }
 
-const EXAMPLE_VOICE = 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4:2 E4 F4 G4:2 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 C4 G3 C4:2 C4 G3 C4:2';
-const EXAMPLE = EXAMPLE_VOICE + '\n---\nR:8 ' + EXAMPLE_VOICE;
+const EX_V = 'C4 D4 E4 C4 C4 D4 E4 C4 E4 F4 G4:2 E4 F4 G4:2 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 G4:.5 A4:.5 G4:.5 F4:.5 E4 C4 C4 G3 C4:2 C4 G3 C4:2';
+const EXAMPLE = EX_V + '\n---\nR:8 ' + EX_V + '\n---\n' + Array(10).fill('C3:2 G2:2').join(' ');
+function loadExample() {
+  $('text').value = EXAMPLE;
+  const res = parseText(EXAMPLE);
+  ['Melody', 'Second voice', 'Bass'].forEach((n, i) => res.parts[i].name = n);
+  res.tempo = 110; setSong(res, 'Frère Jacques (round with bass)');
+}
 
 /* ---------- pitch detection (YIN) ---------- */
 function detectPitch(x, sr) {
@@ -348,7 +371,7 @@ function detectPitch(x, sr) {
   return sr / (best + (k ? (a - c) / (2 * k) : 0));
 }
 
-/* ---------- audio in ---------- */
+/* ---------- audio ---------- */
 function audio() {
   if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
   if (ac.state === 'suspended') ac.resume();
@@ -357,154 +380,133 @@ function audio() {
 async function mic() {
   audio();
   if (stream) return;
-  if (!navigator.mediaDevices || !window.MediaRecorder) throw new Error("This browser can't record here. Open the page in Chrome, Edge, Firefox or Safari over https or from localhost.");
+  if (!navigator.mediaDevices || !ac.audioWorklet) throw new Error("This browser can't record here. Open the page in Chrome, Edge, Firefox or Safari over https or from localhost.");
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
   } catch (e) { throw new Error('Microphone access was blocked. Allow the microphone for this page and try again.'); }
+  const code = "class Cap extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage({t:currentTime,d:c.slice(0)});return true}}registerProcessor('cap',Cap)";
+  await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+  const src = ac.createMediaStreamSource(stream), node = new AudioWorkletNode(ac, 'cap'), mute = ac.createGain();
   analyser = ac.createAnalyser(); analyser.fftSize = 2048;
-  ac.createMediaStreamSource(stream).connect(analyser);
+  mute.gain.value = 0; src.connect(analyser); src.connect(node).connect(mute).connect(ac.destination);
+  node.port.onmessage = e => { if (cap) { if (cap.t === null) cap.t = e.data.t; cap.chunks.push(e.data.d); } };
+  lat = (ac.baseLatency || 0) + (ac.outputLatency || 0) + (stream.getAudioTracks()[0].getSettings().latency || 0);
 }
 
-function tone(ctx, dest, midi, t, dur, vol) {
+function tone(ctx, dest, f, t, dur, vol, type) {
   const o = ctx.createOscillator(), g = ctx.createGain(), a = Math.min(.02, dur / 3);
-  o.type = 'triangle'; o.frequency.value = freq(midi);
+  o.type = type || 'triangle'; o.frequency.value = f;
   g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + a);
   g.gain.setValueAtTime(vol, t + dur - a); g.gain.linearRampToValueAtTime(0, t + dur + .04);
   o.connect(g).connect(dest); o.start(t); o.stop(t + dur + .06);
+  return o;
 }
 
-const holdTime = midi => Math.min(8, Math.max(2, Math.max(...notes().filter(n => n.midi === midi).map(n => n.dur)) * beat() + .6));
-
-function analyse(buf) {
-  const x = buf.getChannelData(0), sr = buf.sampleRate, H = 1024, rms = [];
-  let peak = 0, top = 0;
-  for (let i = 0; i + H <= x.length; i += H) {
-    let s = 0; for (let j = i; j < i + H; j++) { s += x[j] * x[j]; const a = Math.abs(x[j]); if (a > top) top = a; }
-    const r = Math.sqrt(s / H); rms.push(r); if (r > peak) peak = r;
-  }
-  if (peak < 0.01) return null;
-  let a = rms.findIndex(r => r > peak * .25), b = rms.length - 1;
-  while (b > a && rms[b] < peak * .12) b--;
-  a = Math.max(0, a - 1);
-  const start = a * H / sr, end = (b + 1) * H / sr;
-  if (end - start < .25) return null;
-  const f = [];
-  for (let i = a * H; i + 2048 <= (b + 1) * H; i += 2048) { const v = detectPitch(x.subarray(i, i + 2048), sr); if (v) f.push(v); }
-  f.sort((p, q) => p - q);
-  const peaks = [];
-  for (let i = 0; i < 48; i++) {
-    const from = Math.floor((start + (end - start) * i / 48) * sr), to = Math.floor((start + (end - start) * (i + 1) / 48) * sr);
-    let m = 0; for (let j = from; j < to; j += 8) m = Math.max(m, Math.abs(x[j])); peaks.push(m / top);
-  }
-  return { buf, start, end, f0: f.length ? f[f.length >> 1] : 0, gain: Math.min(8, .6 / top), peaks };
-}
-
-async function record(midi) {
-  const card = cards.get(midi);
-  const say = (t, cls) => { card.status.textContent = t; card.status.className = 'status ' + (cls || ''); };
-  await mic();
-  card.el.classList.add('live'); card.rec.textContent = 'Stop';
-  say('Listen…');
-  tone(ac, ac.destination, midi, ac.currentTime + .02, .85, .22);
-  await sleep(1050);
-  if (stopFlag) return false;
-  say('Sing and hold it!');
-  const mr = new MediaRecorder(stream), chunks = [], hold = holdTime(midi) * 1000, began = performance.now();
-  mr.ondataavailable = e => e.data.size && chunks.push(e.data);
-  const done = new Promise(r => mr.onstop = r);
-  mr.start();
-  const live = new Float32Array(2048), target = freq(midi);
-  while (performance.now() - began < hold && !stopFlag) {
-    analyser.getFloatTimeDomainData(live);
-    const f = detectPitch(live, ac.sampleRate);
-    if (f) {
-      let c = 1200 * Math.log2(f / target); c -= 1200 * Math.round(c / 1200);
-      card.needle.style.opacity = 1; card.needle.style.left = 50 + Math.max(-100, Math.min(100, c)) / 4 + '%';
-    } else card.needle.style.opacity = .25;
-    card.bar.style.width = Math.min(100, (performance.now() - began) / hold * 100) + '%';
-    await sleep(60);
-  }
-  mr.stop(); await done;
-  card.needle.style.opacity = 0; card.bar.style.width = 0;
-  say('Working…');
-  let res = null;
-  try { res = analyse(await ac.decodeAudioData(await new Blob(chunks, { type: mr.mimeType }).arrayBuffer())); } catch (e) {}
-  if (!res) { say("Couldn't hear a note. Try again, a bit louder.", 'bad'); return false; }
-  recs.set(midi, res);
-  return true;
-}
-
-async function runRecording(list) {
-  if (busy) { stopFlag = true; return; }
-  busy = true; stopFlag = false; stopPlay(); showMsg('');
-  $('recAll').textContent = 'Stop recording';
-  try {
-    for (const midi of list) {
-      const ok = await record(midi);
-      const stopped = stopFlag && list.length > 1;
-      refresh();
-      if (!ok || stopped) break;
-      if (list.length > 1) await sleep(700);
-    }
-  } catch (e) { showMsg(e.message); refresh(); }
-  busy = false; stopFlag = false;
-  $('recAll').textContent = 'Record the missing notes';
-}
-
-/* ---------- building the collage ---------- */
-function schedule(ctx, list, t0) {
-  const b = beat(), tuned = $('tune').checked, fill = $('fill').checked;
+// o: {synth:[part idx], takes:[part idx], quiet:Set of idx played softer, click, countIn}
+function schedule(ctx, t0, o) {
+  const b = beat(), nodes = [], master = ctx.createGain(), comp = ctx.createDynamicsCompressor(), bus = ctx.createGain();
+  master.connect(comp).connect(ctx.destination); bus.connect(master);
   const edges = [];
-  list.forEach(n => edges.push([n.start, 1], [n.start + n.dur, -1]));
+  o.synth.forEach(i => pnotes(i).forEach(n => edges.push([n.start, 1], [n.start + n.dur, -1])));
   edges.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
   let poly = 0, most = 1; edges.forEach(e => { poly += e[1]; most = Math.max(most, poly); });
-  const out = ctx.createGain(), comp = ctx.createDynamicsCompressor();
-  out.gain.value = .9 / Math.sqrt(most); out.connect(comp).connect(ctx.destination);
-  for (const n of list) {
-    const t = t0 + n.start * b, dur = Math.max(.05, n.dur * b - .01), r = recs.get(n.midi);
-    if (!r) { if (fill) tone(ctx, out, n.midi, t, dur, .16); continue; }
-    const rate = tuned && r.f0 ? Math.min(2, Math.max(.5, freq(n.midi) / r.f0)) : 1;
-    const src = ctx.createBufferSource(), g = ctx.createGain(), len = r.end - r.start, a = Math.min(.02, dur / 3);
-    src.buffer = r.buf; src.playbackRate.value = rate;
-    if (dur + .06 > len / rate) { src.loop = true; src.loopStart = r.start + len * .35; src.loopEnd = r.start + len * .9; }
-    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(r.gain, t + a);
-    g.gain.setValueAtTime(r.gain, t + dur - a); g.gain.linearRampToValueAtTime(0, t + dur + .05);
-    src.connect(g).connect(out); src.start(t, r.start); src.stop(t + dur + .06);
+  bus.gain.value = .9 / Math.sqrt(most);
+  const k = i => song.parts[i].vol * (o.quiet && o.quiet.has(i) ? .5 : 1);
+  for (const i of o.synth) for (const n of pnotes(i)) nodes.push(tone(ctx, bus, freq(n.midi), t0 + n.start * b, Math.max(.05, n.dur * b - .01), .2 * k(i)));
+  for (const i of o.takes) {
+    const tk = song.parts[i].take, when = t0 + tk.off + (+$('nudge').value) / 1000, at = Math.max(when, ctx.currentTime + .005);
+    const src = ctx.createBufferSource(), g = ctx.createGain();
+    src.buffer = tk.buf; g.gain.value = tk.gain * k(i); src.connect(g).connect(master); src.start(at, at - when); nodes.push(src);
   }
+  for (let c = -(o.countIn || 0), end = o.click ? totalBeats() : 0; c < end; c++) nodes.push(tone(ctx, master, c % 4 ? 1400 : 2000, t0 + c * b, .03, .1, 'square'));
+  return { master, nodes };
 }
 
-async function renderSong() {
-  const list = notes(), total = Math.max(...list.map(n => n.start + n.dur)) * beat() + .6;
-  const off = new OfflineAudioContext(2, Math.ceil(total * 44100), 44100);
-  schedule(off, list, .05);
-  return off.startRendering();
+function mixPlan() {
+  const o = { synth: [], takes: [] };
+  song.parts.forEach((p, i) => { if (p.take) o.takes.push(i); else if ($('fill').checked) o.synth.push(i); });
+  return o;
 }
 
-function stopPlay() {
-  if (!playing) return;
-  try { playing.src.stop(); } catch (e) {}
-  playing = null; $('play').textContent = 'Play collage'; $('cursor').style.opacity = 0;
-}
-async function play() {
-  if (playing) return stopPlay();
-  if (busy) return;
+/* ---------- transport: play / preview a part / record a part ---------- */
+async function start(mode, idx) {
+  if (tr) { const same = tr.mode === mode && tr.idx === idx; stop(); if (same) return; }
+  showMsg('');
   audio();
-  const buf = await renderSong(), src = ac.createBufferSource();
-  src.buffer = buf; src.connect(ac.destination);
-  const me = playing = { src, t0: ac.currentTime + .05 };
-  src.onended = () => { if (playing === me) stopPlay(); };
-  src.start(me.t0); $('play').textContent = 'Stop';
-  const wrap = $('rollwrap'), cur = $('cursor');
+  let plan, countIn = 0;
+  if (mode === 'rec') {
+    await mic(); countIn = 4;
+    plan = { synth: [], takes: [], quiet: new Set(), click: $('gClick').checked, countIn };
+    if ($('gNotes').checked) plan.synth.push(idx);
+    if ($('gOthers').checked) song.parts.forEach((p, i) => { if (i !== idx) { (p.take ? plan.takes : plan.synth).push(i); plan.quiet.add(i); } });
+    $('collage').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else plan = mode === 'solo' ? { synth: [idx], takes: [] } : mixPlan();
+  const T0 = ac.currentTime + .15 + countIn * beat();
+  if (mode === 'rec') cap = { chunks: [], t: null };
+  const me = tr = Object.assign(schedule(ac, T0, plan), { mode, idx, T0, total: totalBeats(), list: idx == null ? null : pnotes(idx) });
+  $('now').hidden = mode === 'play'; $('needle').style.opacity = 0;
+  refresh();
+  const wrap = $('rollwrap'), cur = $('cursor'), live = new Float32Array(2048);
   (function tick() {
-    if (playing !== me) return;
-    const x = Math.max(0, (ac.currentTime - me.t0 - .05) / beat()) * roll.ppb + roll.pad;
+    if (tr !== me) return;
+    const sb = (ac.currentTime - me.T0) / beat();
+    if (sb > me.total + .4) return stop();
+    const x = Math.max(0, sb) * roll.ppb + roll.pad;
     cur.style.opacity = 1; cur.style.transform = `translateX(${x}px)`;
-    if (x > wrap.scrollLeft + wrap.clientWidth - 40 || x < wrap.scrollLeft) wrap.scrollLeft = x - 40;
+    if (x > wrap.scrollLeft + wrap.clientWidth - 60 || x < wrap.scrollLeft) wrap.scrollLeft = x - 60;
+    if (me.list) {
+      let now = null, next = null;
+      for (const n of me.list) {
+        if (n.start <= sb && sb < n.start + n.dur) { if (!now || n.midi > now.midi) now = n; }
+        else if (n.start > sb) { next = n; break; }
+      }
+      const name = song.parts[me.idx].name;
+      if (sb < 0) { $('nowNote').textContent = Math.ceil(-sb); $('nowText').textContent = `Get ready to sing ${name}. First note: ${next ? noteName(next.midi) : ''}`; }
+      else {
+        $('nowNote').textContent = now ? noteName(now.midi) : '–';
+        $('nowText').textContent = (me.mode === 'rec' ? 'Recording ' : 'Previewing ') + name + (next ? ` · next: ${noteName(next.midi)}` : '');
+      }
+      if (me.mode === 'rec' && now && sb >= 0) {
+        analyser.getFloatTimeDomainData(live);
+        const f = detectPitch(live, ac.sampleRate);
+        if (f) {
+          let c = 1200 * Math.log2(f / freq(now.midi)); c -= 1200 * Math.round(c / 1200);
+          $('needle').style.opacity = 1; $('needle').style.left = 50 + Math.max(-100, Math.min(100, c)) / 4 + '%';
+        } else $('needle').style.opacity = .25;
+      }
+    }
     requestAnimationFrame(tick);
   })();
 }
 
+function stop(discard) {
+  if (!tr) return;
+  const me = tr; tr = null;
+  me.master.disconnect(); me.nodes.forEach(n => { try { n.stop(); } catch (e) {} });
+  $('cursor').style.opacity = 0; $('now').hidden = true;
+  if (me.mode === 'rec') {
+    const c = cap; cap = null;
+    const n = c.chunks.reduce((s, x) => s + x.length, 0), sungFor = c.t === null ? 0 : c.t + n / ac.sampleRate - me.T0;
+    if (!discard) {
+      let peak = 0;
+      const buf = n ? ac.createBuffer(1, n, ac.sampleRate) : null;
+      if (buf) { const x = buf.getChannelData(0); let o = 0; for (const ch of c.chunks) { x.set(ch, o); o += ch.length; } for (let i = 0; i < n; i += 3) peak = Math.max(peak, Math.abs(x[i])); }
+      if (sungFor < 1) showMsg('That take was stopped before a second of singing, so it was thrown away.');
+      else if (peak < .01) showMsg("Couldn't hear anything in that take. Check the microphone and try again.");
+      else song.parts[me.idx].take = { buf, off: c.t - me.T0 - lat, gain: Math.min(6, .7 / peak), bpm: bpm() };
+    }
+  }
+  if (!discard) refresh();
+}
+
+async function renderSong() {
+  const off = new OfflineAudioContext(2, Math.ceil((totalBeats() * beat() + .7) * 44100), 44100);
+  schedule(off, .05, mixPlan());
+  return off.startRendering();
+}
+
 async function save() {
+  stop();
   const buf = await renderSong(), L = buf.getChannelData(0), R = buf.getChannelData(1), n = buf.length;
   const d = new DataView(new ArrayBuffer(44 + n * 4)), w = (o, s) => [...s].forEach((c, i) => d.setUint8(o + i, c.charCodeAt(0)));
   w(0, 'RIFF'); d.setUint32(4, 36 + n * 4, true); w(8, 'WAVEfmt '); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 2, true);
@@ -523,83 +525,80 @@ async function save() {
 /* ---------- drawing ---------- */
 const roll = { ppb: 30, pad: 12 };
 function drawRoll() {
-  const list = notes(), cv = $('roll'), wrap = $('rollwrap');
-  const lo = Math.min(...list.map(n => n.midi)), hi = Math.max(...list.map(n => n.midi));
-  const beats = Math.max(...list.map(n => n.start + n.dur)), pad = roll.pad;
-  const rowH = Math.max(7, Math.min(22, Math.floor(260 / (hi - lo + 1))));
-  const ppb = roll.ppb = Math.min(12000 / beats, Math.max(26, (wrap.clientWidth - pad * 2) / beats));
+  const all = song.parts.map((p, i) => pnotes(i)), flat = all.flat(), cv = $('roll'), wrap = $('rollwrap');
+  const lo = Math.min(...flat.map(n => n.midi)), hi = Math.max(...flat.map(n => n.midi));
+  const beats = totalBeats(), pad = roll.pad;
+  const rowH = Math.max(6, Math.min(22, Math.floor(280 / (hi - lo + 1))));
+  const ppb = roll.ppb = Math.min(12000 / beats, Math.max(30, (wrap.clientWidth - pad * 2) / beats));
   const W = Math.ceil(beats * ppb + pad * 2), H = (hi - lo + 1) * rowH + pad * 2, dpr = Math.min(2, window.devicePixelRatio || 1);
   cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
   const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
   g.fillStyle = 'rgba(241,236,226,.07)';
   for (let b = 0; b <= beats; b += 4) g.fillRect(pad + b * ppb, pad / 2, 1, H - pad);
-  for (const n of list) {
-    const x = pad + n.start * ppb + 1, y = pad + (hi - n.midi) * rowH + 1, w = Math.max(3, n.dur * ppb - 2), h = rowH - 2, r = recs.get(n.midi);
-    g.beginPath(); g.roundRect(x, y, w, h, Math.min(4, h / 2));
-    if (r) {
-      g.fillStyle = hue(n.midi); g.fill();
-      g.fillStyle = 'rgba(15,26,34,.5)';
-      const k = Math.max(1, Math.floor(w / 3));
-      for (let i = 0; i < k; i++) {
-        const v = r.peaks[Math.floor(i / k * r.peaks.length)] * (h - 2);
-        g.fillRect(x + 1 + i * 3, y + (h - v) / 2, 1.5, Math.max(1, v));
-      }
-    } else { g.strokeStyle = hue(n.midi); g.globalAlpha = .7; g.lineWidth = 1; g.stroke(); g.globalAlpha = 1; }
-  }
-}
-
-function drawCards() {
-  const list = notes(), box = $('notes'), counts = new Map();
-  list.forEach(n => counts.set(n.midi, (counts.get(n.midi) || 0) + 1));
-  const pitches = [...counts.keys()].sort((a, b) => a - b);
-  box.textContent = ''; cards.clear();
-  for (const midi of pitches) {
-    const r = recs.get(midi), el = document.createElement('div');
-    el.className = 'note ' + (r ? 'done' : 'todo');
-    el.innerHTML = `<div class="note-top"><div class="chip" style="background:${hue(midi)}">${noteName(midi)}</div>
-      <div class="note-meta"><b>${noteName(midi)}</b>${freq(midi).toFixed(0)} Hz · used ${counts.get(midi)}× · hold ${holdTime(midi).toFixed(1)}s</div></div>
-      <div class="meter"><i></i><b></b></div><div class="status"></div>
-      <div class="row"><button class="small rec">${r ? 'Redo' : 'Record'}</button><button class="small hear">Hear</button>${r ? '<button class="small mine">Mine</button>' : ''}</div>`;
-    const c = { el, status: el.querySelector('.status'), needle: el.querySelector('.meter i'), bar: el.querySelector('.meter b'), rec: el.querySelector('.rec') };
-    if (r) {
-      if (r.f0) {
-        const st = 12 * Math.log2(r.f0 / freq(midi)), cents = Math.round(st * 100);
-        c.status.textContent = Math.abs(cents) < 30 ? 'Recorded, right on pitch' : `Recorded, you sang ${noteName(Math.round(69 + 12 * Math.log2(r.f0 / 440)))} (${cents > 0 ? '+' : ''}${cents} cents)`;
-      } else c.status.textContent = 'Recorded';
-      c.status.className = 'status good';
-      el.querySelector('.mine').onclick = () => {
-        const a = audio(), s = a.createBufferSource(), g = a.createGain();
-        s.buffer = r.buf; g.gain.value = r.gain; s.connect(g).connect(a.destination); s.start(0, r.start, r.end - r.start);
-      };
+  const focus = tr && tr.idx != null ? tr.idx : -1;
+  all.forEach((list, i) => {
+    const done = !!song.parts[i].take;
+    g.globalAlpha = focus >= 0 && focus !== i ? .22 : 1; g.fillStyle = g.strokeStyle = hue(i); g.lineWidth = 1.25;
+    for (const n of list) {
+      g.beginPath(); g.roundRect(pad + n.start * ppb + 1, pad + (hi - n.midi) * rowH + 1, Math.max(3, n.dur * ppb - 2), rowH - 2, Math.min(4, rowH / 2 - 1));
+      if (done || focus === i) g.fill(); else g.stroke();
     }
-    c.rec.onclick = () => runRecording([midi]);
-    el.querySelector('.hear').onclick = () => { const a = audio(); tone(a, a.destination, midi, a.currentTime + .02, 1, .22); };
-    cards.set(midi, c); box.appendChild(el);
-  }
-  const done = pitches.filter(m => recs.has(m)).length;
-  $('progress').textContent = `${done} of ${pitches.length} recorded`;
-  $('recAll').disabled = done === pitches.length && !busy;
-  $('songbar').innerHTML = `<b></b> · ${list.length} notes · ${pitches.length} different pitches · ${noteName(pitches[0])} to ${noteName(pitches[pitches.length - 1])} · ${Math.round(Math.max(...list.map(n => n.start + n.dur)) * beat())}s`;
-  $('songbar').firstChild.textContent = song.title || 'Untitled';
+  });
+  g.globalAlpha = 1;
 }
 
-function refresh() { drawCards(); drawRoll(); }
+function drawParts() {
+  const box = $('parts');
+  // Rows are built once per song and then updated in place, so a click is never lost to a rebuild.
+  if (!song.parts[0].ui) {
+    box.textContent = '';
+    song.parts.forEach((p, i) => {
+      const el = document.createElement('div');
+      el.innerHTML = `<div class="chip" style="background:${hue(i)}">${i + 1}</div>
+        <div class="part-meta"><b></b><span></span></div>
+        <label class="field">Octave <input type="number" class="oct" min="-3" max="3" value="${p.oct}"></label>
+        <label class="field">Volume <input type="range" class="vol" min="0" max="1.5" step="0.05" value="${p.vol}"></label>
+        <button class="small pre"></button><button class="small rec"></button>`;
+      p.ui = { el, meta: el.querySelector('span'), pre: el.querySelector('.pre'), rec: el.querySelector('.rec') };
+      el.querySelector('b').textContent = p.name;
+      el.querySelector('.oct').onchange = e => { stop(); p.oct = Math.max(-3, Math.min(3, Math.round(+e.target.value || 0))); refresh(); };
+      el.querySelector('.vol').oninput = e => { p.vol = +e.target.value; };
+      p.ui.pre.onclick = () => guard(() => start('solo', i));
+      p.ui.rec.onclick = () => guard(() => start('rec', i));
+      box.appendChild(el);
+    });
+  }
+  song.parts.forEach((p, i) => {
+    const list = pnotes(i), lo = Math.min(...list.map(n => n.midi)), hi = Math.max(...list.map(n => n.midi)), live = tr && tr.idx === i;
+    p.ui.el.className = 'part ' + (p.take ? 'done' : 'todo') + (live && tr.mode === 'rec' ? ' live' : '');
+    const state = !p.take ? 'not recorded' : p.take.bpm !== bpm() ? `<span class="bad">recorded at ${p.take.bpm} bpm, out of time now</span>` : '<span class="good">recorded</span>';
+    p.ui.meta.innerHTML = `${noteName(lo)} to ${noteName(hi)} · ${list.length} note${list.length > 1 ? 's' : ''} · ${state}`;
+    p.ui.pre.textContent = live && tr.mode === 'solo' ? 'Stop' : 'Preview';
+    p.ui.rec.textContent = live && tr.mode === 'rec' ? 'Stop' : p.take ? 'Redo' : 'Record';
+  });
+  const done = song.parts.filter(p => p.take).length, flat = song.parts.flatMap(p => p.notes);
+  $('progress').textContent = `${done} of ${song.parts.length} recorded`;
+  $('songbar').innerHTML = `<b></b> · ${song.parts.length} part${song.parts.length > 1 ? 's' : ''} · ${flat.length} notes · ${Math.round(totalBeats() * beat())}s`;
+  $('songbar').firstChild.textContent = song.title || 'Untitled';
+  $('play').textContent = tr && tr.mode === 'play' ? 'Stop' : 'Play collage';
+}
+
+function refresh() { drawParts(); drawRoll(); }
 function showMsg(t) { $('msg').textContent = t; $('msg').hidden = !t; }
-async function guard(fn) { try { showMsg(''); await fn(); } catch (e) { showMsg(e.message || String(e)); } }
+async function guard(fn) { try { await fn(); } catch (e) { showMsg(e.message || String(e)); } }
 
 /* ---------- wiring ---------- */
-$('file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) guard(() => openFile(f)); };
-$('example').onclick = () => guard(() => { $('text').value = EXAMPLE; setSong(parseText(EXAMPLE), 'Frère Jacques (two-part round)', 110); });
-$('useText').onclick = () => guard(() => setSong(parseText($('text').value), 'My song'));
-$('recAll').onclick = () => runRecording([...cards.keys()].filter(m => !recs.has(m)));
-$('play').onclick = () => guard(play);
+$('file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) guard(() => { showMsg(''); return openFile(f); }); };
+$('example').onclick = () => guard(loadExample);
+$('useText').onclick = () => guard(() => { showMsg(''); setSong(parseText($('text').value), 'My song'); });
+$('play').onclick = () => guard(() => start('play', null));
 $('save').onclick = () => guard(save);
-$('bpm').onchange = $('shift').onchange = () => { stopPlay(); refresh(); };
-$('tune').onchange = $('fill').onchange = stopPlay;
+$('bpm').onchange = $('shift').onchange = () => { stop(); refresh(); };
+$('fill').onchange = () => stop();
+$('nudge').oninput = e => { $('nudgeV').textContent = e.target.value + ' ms'; };
+$('nudge').onchange = () => stop();
 addEventListener('resize', drawRoll);
 document.fonts && document.fonts.ready.then(drawRoll);
-
-$('text').value = EXAMPLE;
-setSong(parseText(EXAMPLE), 'Frère Jacques (two-part round)', 110);
+loadExample();
 </script>
 </html>
