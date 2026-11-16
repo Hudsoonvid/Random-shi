@@ -372,18 +372,21 @@ function detectPitch(x, sr) {
 }
 
 /* ---------- audio ---------- */
-function audio() {
+async function audio() {
   if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
-  if (ac.state === 'suspended') ac.resume();
-  return ac;
+  // On iPhone and iPad this keeps sound playing even when the silent switch is on.
+  try { if (navigator.audioSession) navigator.audioSession.type = stream ? 'play-and-record' : 'playback'; } catch (e) {}
+  if (ac.state !== 'running') await Promise.race([ac.resume(), new Promise(r => setTimeout(r, 1500))]);
+  if (ac.state !== 'running') throw new Error("Sound is blocked here. Open this page in a normal browser tab (Chrome or Safari) instead of a preview.");
 }
 async function mic() {
-  audio();
+  await audio();
   if (stream) return;
   if (!navigator.mediaDevices || !ac.audioWorklet) throw new Error("This browser can't record here. Open the page in Chrome, Edge, Firefox or Safari over https or from localhost.");
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-  } catch (e) { throw new Error('Microphone access was blocked. Allow the microphone for this page and try again.'); }
+  } catch (e) { throw new Error('The microphone is blocked here. Open this page in a normal browser tab (not a preview) and allow the microphone.'); }
+  try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) {}
   const code = "class Cap extends AudioWorkletProcessor{process(i){const c=i[0][0];if(c)this.port.postMessage({t:currentTime,d:c.slice(0)});return true}}registerProcessor('cap',Cap)";
   await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
   const src = ac.createMediaStreamSource(stream), node = new AudioWorkletNode(ac, 'cap'), mute = ac.createGain();
@@ -432,7 +435,7 @@ function mixPlan() {
 async function start(mode, idx) {
   if (tr) { const same = tr.mode === mode && tr.idx === idx; stop(); if (same) return; }
   showMsg('');
-  audio();
+  await audio();
   let plan, countIn = 0;
   if (mode === 'rec') {
     await mic(); countIn = 4;
